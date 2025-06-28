@@ -10,6 +10,8 @@ import { useLiveRegion } from './hooks/useKeyboardNavigation';
 import { PerformanceMonitor } from './utils/performanceMonitor';
 
 function App() {
+  console.log('App component loading...'); // Debug log
+  
   const location = useLocation();
   const { announce } = useLiveRegion('polite');
 
