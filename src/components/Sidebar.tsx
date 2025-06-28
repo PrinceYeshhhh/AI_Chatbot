@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Conversation } from '../types';
 import { Plus, MessageSquare, Trash2, Settings, Database, X, Sparkles } from 'lucide-react';
+import { VirtualConversationList } from './VirtualList';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -88,56 +89,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Conversations */}
       <div className="flex-1 overflow-y-auto p-2">
-        <div className="space-y-1">
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              className={`group relative rounded-xl transition-all duration-300 ${
-                currentConversation?.id === conversation.id
-                  ? 'bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 shadow-md'
-                  : 'hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-md'
-              } ${deletingId === conversation.id ? 'opacity-50 scale-95' : ''}`}
-              onMouseEnter={() => setHoveredId(conversation.id)}
-              onMouseLeave={() => setHoveredId(null)}
-            >
-              <button
-                onClick={() => handleSelectConversation(conversation)}
-                className="w-full text-left p-3 rounded-xl focus:ring-2 focus:ring-blue-200 transition-all duration-300"
-                disabled={deletingId === conversation.id}
-              >
-                <div className="flex items-start gap-3">
-                  <MessageSquare className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {conversation.title}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1 font-medium">
-                      {conversation.messages.length} messages
-                    </p>
-                  </div>
-                </div>
-              </button>
-              
-              {hoveredId === conversation.id && deletingId !== conversation.id && (
-                <button
-                  onClick={(e) => handleDeleteConversation(conversation.id, e)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-red-600 hover:bg-gradient-to-br hover:from-red-50 hover:to-red-100 rounded-lg transition-all duration-300 focus:ring-2 focus:ring-red-200 transform hover:scale-110 active:scale-95"
-                  title="Delete conversation"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          ))}
-          
-          {conversations.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm font-medium">No conversations yet</p>
-              <p className="text-xs mt-1">Start a new chat to begin</p>
-            </div>
-          )}
-        </div>
+        <VirtualConversationList
+          conversations={conversations}
+          currentConversationId={currentConversation?.id ?? ''}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={onDeleteConversation}
+          height={600}
+        />
       </div>
 
       {/* Footer */}

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Upload, Plus, FileText, Brain, Download, Trash2, AlertCircle, CheckCircle, Clock, Database } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { TrainingData } from '../types';
+import { VirtualList } from './VirtualList';
 
 interface TrainingModalProps {
   isOpen: boolean;
@@ -169,6 +170,39 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
 
   const stats = chatService.getTrainingStats();
 
+  // Calculate additional statistics from training data
+  const allTrainingData = chatService.getTrainingData();
+  const totalExamples = allTrainingData.length;
+  const uniqueIntents = new Set(allTrainingData.map(item => item.intent)).size;
+  const averageConfidence = allTrainingData.length > 0 
+    ? allTrainingData.reduce((sum, item) => sum + item.confidence, 0) / allTrainingData.length 
+    : 0;
+
+  // Calculate intent distribution
+  const intentDistribution = allTrainingData.reduce((acc, item) => {
+    acc[item.intent] = (acc[item.intent] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Combine stats with proper typing
+  const combinedStats: {
+    total: number;
+    validated: number;
+    pending: number;
+    rejected: number;
+    validationRate: number;
+    totalExamples: number;
+    uniqueIntents: number;
+    averageConfidence: number;
+    intentDistribution: Record<string, number>;
+  } = {
+    ...stats,
+    totalExamples,
+    uniqueIntents,
+    averageConfidence,
+    intentDistribution
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -183,7 +217,7 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
                 AI Training Center
               </h2>
               <p className="text-sm text-gray-600">
-                Enhance your AI with custom data and examples • {stats.totalExamples} examples trained
+                Enhance your AI with custom data and examples • {combinedStats.totalExamples} examples trained
               </p>
             </div>
           </div>
@@ -447,43 +481,90 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
                   )}
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {trainingData.map((item) => (
-                    <div key={item.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-3">
-                          <div>
-                            <span className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                              User Input
-                            </span>
-                            <p className="text-sm text-gray-900 mt-1 bg-blue-50 p-2 rounded-lg">
-                              {item.input}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-xs font-medium text-green-600 uppercase tracking-wide">
-                              Expected Response
-                            </span>
-                            <p className="text-sm text-gray-900 mt-1 bg-green-50 p-2 rounded-lg">
-                              {item.expectedOutput}
-                            </p>
-                          </div>
-                          <div className="flex items-center space-x-4 text-xs text-gray-500">
-                            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
-                              {item.intent}
-                            </span>
-                            <span>Confidence: {(item.confidence * 100).toFixed(0)}%</span>
-                            <span>{item.dateAdded.toLocaleDateString()}</span>
+                  {trainingData.length > 30 ? (
+                    <VirtualList
+                      items={trainingData}
+                      height={384}
+                      itemHeight={64}
+                      renderItem={(item) => (
+                        <div key={item.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 space-y-3">
+                              <div>
+                                <span className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                                  User Input
+                                </span>
+                                <p className="text-sm text-gray-900 mt-1 bg-blue-50 p-2 rounded-lg">
+                                  {item.input}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-xs font-medium text-green-600 uppercase tracking-wide">
+                                  Expected Response
+                                </span>
+                                <p className="text-sm text-gray-900 mt-1 bg-green-50 p-2 rounded-lg">
+                                  {item.expectedOutput}
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-4 text-xs text-gray-500">
+                                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
+                                  {item.intent}
+                                </span>
+                                <span>Confidence: {(item.confidence * 100).toFixed(0)}%</span>
+                                <span>{item.dateAdded.toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteExample(item.id)}
+                              className="ml-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteExample(item.id)}
-                          className="ml-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      )}
+                      className="space-y-3"
+                      aria-label="Training examples"
+                    />
+                  ) : (
+                    trainingData.map((item) => (
+                      <div key={item.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-3">
+                            <div>
+                              <span className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                                User Input
+                              </span>
+                              <p className="text-sm text-gray-900 mt-1 bg-blue-50 p-2 rounded-lg">
+                                {item.input}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-green-600 uppercase tracking-wide">
+                                Expected Response
+                              </span>
+                              <p className="text-sm text-gray-900 mt-1 bg-green-50 p-2 rounded-lg">
+                                {item.expectedOutput}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-4 text-xs text-gray-500">
+                              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
+                                {item.intent}
+                              </span>
+                              <span>Confidence: {(item.confidence * 100).toFixed(0)}%</span>
+                              <span>{item.dateAdded.toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteExample(item.id)}
+                            className="ml-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                   {trainingData.length === 0 && (
                     <div className="text-center py-12 text-gray-500">
                       <Brain className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -506,7 +587,7 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
                       <Database className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-blue-900">{stats.totalExamples}</p>
+                      <p className="text-2xl font-bold text-blue-900">{combinedStats.totalExamples}</p>
                       <p className="text-sm text-blue-700">Training Examples</p>
                     </div>
                   </div>
@@ -518,7 +599,7 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
                       <Brain className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-purple-900">{stats.uniqueIntents}</p>
+                      <p className="text-2xl font-bold text-purple-900">{combinedStats.uniqueIntents}</p>
                       <p className="text-sm text-purple-700">Intent Categories</p>
                     </div>
                   </div>
@@ -530,7 +611,7 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
                       <CheckCircle className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-green-900">{(stats.averageConfidence * 100).toFixed(0)}%</p>
+                      <p className="text-2xl font-bold text-green-900">{(combinedStats.averageConfidence * 100).toFixed(0)}%</p>
                       <p className="text-sm text-green-700">Avg Confidence</p>
                     </div>
                   </div>
@@ -538,18 +619,18 @@ export default function TrainingModal({ isOpen, onClose }: TrainingModalProps) {
               </div>
 
               {/* Intent Distribution */}
-              {Object.keys(stats.intentDistribution).length > 0 && (
+              {Object.keys(combinedStats.intentDistribution).length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Intent Distribution</h4>
                   <div className="space-y-3">
-                    {Object.entries(stats.intentDistribution).map(([intent, count]) => (
+                    {Object.entries(combinedStats.intentDistribution).map(([intent, count]) => (
                       <div key={intent} className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700 capitalize">{intent}</span>
                         <div className="flex items-center space-x-3">
                           <div className="w-32 bg-gray-200 rounded-full h-2">
                             <div 
                               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${(count / stats.totalExamples) * 100}%` }}
+                              style={{ width: `${(count / combinedStats.totalExamples) * 100}%` }}
                             ></div>
                           </div>
                           <span className="text-sm text-gray-500 w-8 text-right">{count}</span>

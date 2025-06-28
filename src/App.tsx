@@ -8,6 +8,7 @@ import { ErrorBoundary, MLErrorBoundary } from './components/ErrorBoundary';
 import { useKeyboardNavigation, CHAT_KEYBOARD_SHORTCUTS } from './hooks/useKeyboardNavigation';
 import { useLiveRegion } from './hooks/useKeyboardNavigation';
 import { PerformanceMonitor } from './utils/performanceMonitor';
+import { FeatureTestPanel } from './components/FeatureTestPanel';
 
 function App() {
   console.log('App component loading...'); // Debug log
@@ -112,6 +113,7 @@ function App() {
                 </MLErrorBoundary>
               } 
             />
+            <Route path="/test" element={<FeatureTestPanel />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
           </Routes>
         </AnimatePresence>

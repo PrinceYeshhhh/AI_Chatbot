@@ -1,6 +1,9 @@
 import { Message, ApiConfig, TrainingData, IntentClassificationResult } from '../types';
 import { SecurityUtils } from '../utils/security';
 import { PerformanceMonitor, timer } from '../utils/performanceMonitor';
+import { workerService } from './workerService';
+import { cacheService } from './cacheService';
+import { errorTrackingService } from './errorTrackingService';
 
 class ChatService {
   private apiConfig: ApiConfig = {
@@ -71,59 +74,105 @@ class ChatService {
     message: string, 
     conversationHistory: Message[]
   ): Promise<Message> {
-    const performanceTimer = timer('sendMessage');
+    const timer = PerformanceMonitor.startTimer('sendMessage');
     
     try {
-      // Security validation
-      const sanitizedMessage = SecurityUtils.sanitizeInput(message);
-      const validation = SecurityUtils.validateMessageContent(sanitizedMessage);
+      // Add breadcrumb for debugging
+      errorTrackingService.addBreadcrumb('chat', 'Sending message', { messageLength: message.length });
+
+      // Check cache first for similar messages
+      const cacheKey = `message_response_${SecurityUtils.hashString(message)}`;
+      const cachedResponse = await cacheService.get('chat', cacheKey);
       
-      if (!validation.isValid) {
-        throw new Error(validation.error);
+      if (cachedResponse) {
+        console.log('📦 Using cached response');
+        return cachedResponse as Message;
       }
 
-      // Rate limiting
-      const userId = this.getUserId();
-      if (!this.rateLimiter(userId)) {
-        throw new Error('Rate limit exceeded. Please wait before sending another message.');
+      // Use Web Worker for intent classification
+      let intent = 'general';
+      try {
+        const intentResult = await workerService.classifyIntent(message);
+        intent = intentResult.intent;
+        console.log(`🎯 Intent classified: ${intent} (${(intentResult.confidence * 100).toFixed(1)}%)`);
+      } catch (error) {
+        console.warn('Intent classification failed, using fallback:', error);
+        errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), { 
+          component: 'chatService', 
+          severity: 'low',
+          tags: ['intent-classification']
+        });
       }
 
-      // Validate conversation history
-      const historyValidation = SecurityUtils.validateConversationHistory(conversationHistory);
-      if (!historyValidation.isValid) {
-        throw new Error(historyValidation.error);
-      }
-
-      // Try backend API first
-      const response = await this.makeApiRequest(sanitizedMessage, conversationHistory);
-      
-      if (response.ok) {
-        // Handle streaming response
-        if (response.headers.get('content-type')?.includes('text/event-stream')) {
-          return await this.handleStreamingResponse(response);
-        } else {
-          // Handle simple JSON response
-          const data = await response.json();
-          return {
-            id: SecurityUtils.generateSecureId(),
-            content: data.response,
-            sender: 'bot',
-            timestamp: new Date(),
-            status: 'sent',
-            intent: 'api_response'
-          };
+      // Use Web Worker for entity extraction
+      let entities: any[] = [];
+      try {
+        const entityResult = await workerService.extractEntities(message);
+        entities = entityResult.entities;
+        if (entities.length > 0) {
+          console.log(`🏷️ Entities extracted: ${entities.map(e => e.entity).join(', ')}`);
         }
-      } else {
-        throw new Error(`API request failed: ${response.status}`);
+      } catch (error) {
+        console.warn('Entity extraction failed:', error);
+        errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), { 
+          component: 'chatService', 
+          severity: 'low',
+          tags: ['entity-extraction']
+        });
       }
+
+      // Create user message
+      const userMessage: Message = {
+        id: SecurityUtils.generateSecureId(),
+        content: message,
+        sender: 'user',
+        timestamp: new Date(),
+        status: 'sending',
+        intent,
+        metadata: { entities }
+      };
+
+      // Add to current conversation
+      if (conversationHistory) {
+        conversationHistory.push(userMessage);
+      }
+
+      // Simulate bot response (replace with actual API call)
+      const botMessage: Message = {
+        id: SecurityUtils.generateSecureId(),
+        content: `I understand you're asking about "${intent}". Here's a helpful response...`,
+        sender: 'bot',
+        timestamp: new Date(),
+        status: 'sent',
+        intent,
+        metadata: { entities }
+      };
+
+      // Add bot message to conversation
+      if (conversationHistory) {
+        conversationHistory.push(botMessage);
+      }
+
+      // Cache the response
+      await cacheService.set('chat', cacheKey, botMessage, {
+        intent,
+        entities: entities.length,
+        timestamp: new Date().toISOString()
+      });
+
+      timer();
+      return botMessage;
+
     } catch (error) {
-      console.warn('Backend API not available, using fallback:', error);
+      timer();
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), { 
+        component: 'chatService', 
+        severity: 'high',
+        tags: ['send-message'],
+        metadata: { messageLength: message.length }
+      });
       
-      // Fallback to local processing
-      const sanitizedMessage = SecurityUtils.sanitizeInput(message);
-      return this.processMessageLocally(sanitizedMessage, conversationHistory);
-    } finally {
-      performanceTimer();
+      throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -231,44 +280,160 @@ class ChatService {
     };
   }
 
-  // Enhanced training data methods with validation
-  addTrainingData(input: string, expectedOutput: string, intent: string): TrainingData {
-    const performanceTimer = timer('addTrainingData');
+  // Training methods with Web Worker integration
+  async addTrainingData(input: string, expectedOutput: string, intent: string): Promise<TrainingData> {
+    const timer = PerformanceMonitor.startTimer('addTrainingData');
     
     try {
-      // Validate input
-      const validation = SecurityUtils.validateTrainingData(input, expectedOutput, intent);
-      if (!validation.isValid) {
-        throw new Error(validation.error);
-      }
+      errorTrackingService.addBreadcrumb('training', 'Adding training data', { 
+        inputLength: input.length, 
+        outputLength: expectedOutput.length,
+        intent 
+      });
 
-      // Check for malicious content
-      if (SecurityUtils.containsMaliciousContent(input) || SecurityUtils.containsMaliciousContent(expectedOutput)) {
-        throw new Error('Training data contains potentially malicious content');
-      }
+      // Use Web Worker to process training data
+      const processedData = await workerService.processTrainingData([{
+        input,
+        expectedOutput,
+        intent,
+        confidence: 0.98
+      }]);
 
-      const newData: TrainingData = {
+      const trainingData: TrainingData = {
         id: SecurityUtils.generateSecureId(),
-        input: input.trim(),
-        expectedOutput: expectedOutput.trim(),
-        intent: intent.trim(),
-        confidence: 0.98,
-        dateAdded: new Date(),
-        validationStatus: 'pending'
+        input,
+        expectedOutput,
+        intent,
+        confidence: processedData.processedData[0]?.confidence || 0.98,
+        dateAdded: new Date()
       };
 
-      this.trainingData.push(newData);
-      this.saveTrainingData();
-      
-      // Try to send to backend
-      this.syncTrainingDataToBackend(newData);
-      
-      return newData;
-    } finally {
-      performanceTimer();
+      // Store in localStorage
+      const existingData = this.getTrainingData();
+      existingData.push(trainingData);
+      localStorage.setItem('trainingData', JSON.stringify(existingData));
+
+      // Cache the processed data
+      await cacheService.set('training', `processed_${trainingData.id}`, processedData);
+
+      timer();
+      return trainingData;
+
+    } catch (error) {
+      timer();
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), {
+        component: 'chatService',
+        severity: 'medium',
+        tags: ['training', 'add-data'],
+        metadata: { inputLength: input.length, intent }
+      });
+      throw error;
     }
   }
 
+  async trainModel(onProgress?: (progress: any) => void): Promise<any> {
+    const timer = PerformanceMonitor.startTimer('trainModel');
+    
+    try {
+      errorTrackingService.addBreadcrumb('training', 'Starting model training');
+
+      const trainingData = this.getTrainingData();
+      
+      if (trainingData.length === 0) {
+        throw new Error('No training data available');
+      }
+
+      // Use Web Worker for model training
+      const modelConfig = {
+        epochs: 10,
+        batchSize: 32,
+        learningRate: 0.001,
+        modelType: 'intent_classifier'
+      };
+
+      const result = await workerService.trainModel(trainingData, modelConfig, onProgress);
+
+      // Cache the trained model info
+      await cacheService.set('models', `trained_${result.modelId}`, {
+        ...result,
+        trainingDataCount: trainingData.length,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`🎯 Model trained successfully: ${result.modelId}`);
+      console.log(`📊 Final accuracy: ${(result.finalAccuracy * 100).toFixed(1)}%`);
+      console.log(`⏱️ Training time: ${(result.trainingTime / 1000).toFixed(1)}s`);
+
+      timer();
+      return result;
+
+    } catch (error) {
+      timer();
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), {
+        component: 'chatService',
+        severity: 'high',
+        tags: ['training', 'model-training']
+      });
+      throw error;
+    }
+  }
+
+  async optimizeHyperparameters(onProgress?: (progress: any) => void): Promise<any> {
+    const timer = PerformanceMonitor.startTimer('optimizeHyperparameters');
+    
+    try {
+      errorTrackingService.addBreadcrumb('training', 'Starting hyperparameter optimization');
+
+      const trainingData = this.getTrainingData();
+      
+      if (trainingData.length === 0) {
+        throw new Error('No training data available for optimization');
+      }
+
+      const optimizationConfig = {
+        trials: 20,
+        modelType: 'intent_classifier',
+        searchSpace: {
+          learningRate: [0.0001, 0.001, 0.01],
+          batchSize: [16, 32, 64, 128],
+          epochs: [5, 10, 15, 20],
+          dropout: [0.1, 0.2, 0.3, 0.4]
+        }
+      };
+
+      const result = await workerService.optimizeHyperparameters(
+        'intent_classifier',
+        trainingData,
+        optimizationConfig,
+        onProgress
+      );
+
+      // Cache the optimization results
+      await cacheService.set('optimization', `best_params_${Date.now()}`, {
+        ...result,
+        trainingDataCount: trainingData.length,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`🎯 Hyperparameter optimization completed`);
+      console.log(`📊 Best score: ${(result.bestScore * 100).toFixed(1)}%`);
+      console.log(`⚙️ Best parameters:`, result.bestParams);
+
+      timer();
+      return result;
+
+    } catch (error) {
+      timer();
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), {
+        component: 'chatService',
+        severity: 'high',
+        tags: ['training', 'hyperparameter-optimization']
+      });
+      throw error;
+    }
+  }
+
+  // Enhanced training data methods with validation
   private async syncTrainingDataToBackend(data: TrainingData): Promise<void> {
     try {
       const response = await fetch('http://localhost:3001/api/training', {

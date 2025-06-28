@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppError } from '../types';
+import { errorTrackingService } from '../services/errorTrackingService';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -27,54 +28,33 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error Boundary caught an error:', error, errorInfo);
-    }
+    console.error('Error caught by boundary:', error, errorInfo);
+    
+    // Track error with context
+    errorTrackingService.trackError(error, {
+      component: 'ErrorBoundary',
+      severity: 'high',
+      tags: ['react-error-boundary'],
+      metadata: {
+        componentStack: errorInfo.componentStack,
+        errorBoundaryType: 'general'
+      }
+    });
 
     // Call custom error handler if provided
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }
 
-    // Send to error tracking service in production
-    if (process.env.NODE_ENV === 'production') {
-      this.logErrorToService(error, errorInfo);
-    }
-
-    this.setState({ error, errorInfo });
+    this.setState({ hasError: true, error, errorInfo });
   }
 
-  private logErrorToService(error: Error, errorInfo: React.ErrorInfo): void {
-    try {
-      // In a real app, this would send to Sentry, LogRocket, etc.
-      const errorData: AppError = {
-        code: 'REACT_ERROR',
-        message: error.message,
-        details: {
-          stack: error.stack,
-          componentStack: errorInfo.componentStack,
-          timestamp: new Date().toISOString()
-        },
-        timestamp: new Date(),
-        stack: error.stack
-      };
-
-      // Send to backend error tracking endpoint
-      fetch('/api/errors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(errorData)
-      }).catch(() => {
-        // Silently fail if error tracking fails
-      });
-    } catch {
-      // Silently fail if error logging fails
-    }
-  }
-
-  private resetError = (): void => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+  resetError = (): void => {
+    this.setState({ 
+      hasError: false, 
+      error: undefined as unknown as Error, 
+      errorInfo: undefined as unknown as React.ErrorInfo
+    });
   };
 
   render(): React.ReactNode {
@@ -82,15 +62,28 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       if (this.props.fallback) {
         const FallbackComponent = this.props.fallback;
         return (
-          <FallbackComponent 
-            error={this.state.error!} 
-            errorInfo={this.state.errorInfo} 
+          <FallbackComponent
+            error={this.state.error!}
+            errorInfo={this.state.errorInfo}
             resetError={this.resetError}
           />
         );
       }
 
-      return <DefaultErrorFallback error={this.state.error!} resetError={this.resetError} />;
+      return (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h3 className="text-red-800 font-semibold">Something went wrong</h3>
+          <p className="text-red-600 mt-2">
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </p>
+          <button
+            onClick={this.resetError}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      );
     }
 
     return this.props.children;

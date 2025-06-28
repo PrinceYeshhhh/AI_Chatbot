@@ -3,6 +3,7 @@ import { ChatMessage } from './ChatMessage';
 import { TypingIndicator } from './TypingIndicator';
 import { OnboardingMessage } from './OnboardingMessage';
 import { ChatTemplates } from './ChatTemplates';
+import { VirtualList } from './VirtualList';
 
 interface Message {
   id: string;
@@ -44,7 +45,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       {messages.length === 0 && !showOnboarding && (
         <ChatTemplates onTemplateSelect={onTemplateSelect} />
       )}
-      {messages.length > 0 && (
+      {messages.length > 30 ? (
+        <VirtualList
+          items={messages}
+          height={600}
+          itemHeight={80}
+          renderItem={(message) => <ChatMessage key={message.id} message={message} />}
+          className="space-y-6"
+          aria-label="Chat messages"
+        />
+      ) : messages.length > 0 && (
         <div className="space-y-6">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
@@ -52,6 +62,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           {isTyping && <TypingIndicator />}
         </div>
       )}
+      {isTyping && messages.length > 30 && <TypingIndicator />}
     </div>
   );
 };
