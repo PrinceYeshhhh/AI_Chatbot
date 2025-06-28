@@ -9,12 +9,14 @@ import { useKeyboardNavigation, CHAT_KEYBOARD_SHORTCUTS } from './hooks/useKeybo
 import { useLiveRegion } from './hooks/useKeyboardNavigation';
 import { PerformanceMonitor } from './utils/performanceMonitor';
 import { FeatureTestPanel } from './components/FeatureTestPanel';
+import IntroAnimation from './components/IntroAnimation';
 
 function App() {
   console.log('App component loading...'); // Debug log
   
   const location = useLocation();
   const { announce } = useLiveRegion('polite');
+  const [showIntro, setShowIntro] = React.useState(true);
 
   // Set up keyboard navigation for the entire app
   useKeyboardNavigation({
@@ -70,6 +72,17 @@ function App() {
       timer();
     };
   }, [location.pathname, announce]);
+
+  // Handle intro completion
+  const handleIntroComplete = () => {
+    setShowIntro(false);
+    announce('AI Chatbot loaded successfully');
+  };
+
+  // Show intro animation on first load
+  if (showIntro) {
+    return <IntroAnimation onComplete={handleIntroComplete} />;
+  }
 
   return (
     <ErrorBoundary
