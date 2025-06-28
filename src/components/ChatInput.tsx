@@ -204,11 +204,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               disabled={disabled || isProcessing}
               aria-label={isRecording ? "Stop voice recording" : "Start voice recording"}
               aria-pressed={isRecording}
-              className={`p-1.5 transition-all duration-200 rounded-md ${
+              className={`p-2 transition-all duration-300 rounded-lg shadow-sm hover:shadow-md transform hover:scale-110 active:scale-95 ${
                 isRecording 
-                  ? 'text-red-600 bg-red-50 hover:bg-red-100' 
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  ? 'text-red-600 bg-gradient-to-br from-red-50 to-red-100 hover:from-red-100 hover:to-red-200 ring-2 ring-red-200' 
+                  : 'text-gray-500 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 hover:text-gray-700'
+              } disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
             >
               <Mic className={`w-4 h-4 ${isRecording ? 'animate-pulse' : ''}`} aria-hidden="true" />
             </button>
@@ -217,7 +217,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onClick={handleFileAttach}
               disabled={disabled || isProcessing}
               aria-label="Attach file"
-              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors duration-200 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-gray-500 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 hover:text-gray-700 transition-all duration-300 rounded-lg shadow-sm hover:shadow-md transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <Paperclip className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -238,7 +238,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           disabled={!message.trim() || disabled || isProcessing || isOverLimit}
           aria-label="Send message"
           aria-describedby="send-button-help"
-          className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 focus:ring-2 focus:ring-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+          className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 focus:ring-2 focus:ring-blue-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-blue-600 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:transform-none"
         >
           <Send className="w-5 h-5" aria-hidden="true" />
           {isProcessing && (

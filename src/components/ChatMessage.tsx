@@ -64,40 +64,42 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
       aria-describedby={timestampId}
     >
       <div 
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-          isUser ? 'bg-blue-600' : 'bg-purple-600'
+        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-lg ${
+          isUser 
+            ? 'bg-gradient-to-br from-blue-500 to-blue-600 ring-2 ring-blue-200' 
+            : 'bg-gradient-to-br from-purple-500 to-purple-600 ring-2 ring-purple-200'
         }`}
         aria-hidden="true"
       >
         {isUser ? (
-          <User className="w-4 h-4 text-white" aria-hidden="true" />
+          <User className="w-5 h-5 text-white" aria-hidden="true" />
         ) : (
-          <Bot className="w-4 h-4 text-white" aria-hidden="true" />
+          <Bot className="w-5 h-5 text-white" aria-hidden="true" />
         )}
       </div>
       
       <div className={`flex flex-col max-w-xs sm:max-w-md lg:max-w-2xl xl:max-w-3xl ${isUser ? 'items-end' : 'items-start'}`}>
         <div 
-          className={`px-4 py-3 rounded-2xl ${
+          className={`px-5 py-4 rounded-2xl ${
             isUser 
-              ? 'bg-blue-600 text-white rounded-br-sm' 
-              : 'bg-gray-100 text-gray-900 rounded-bl-sm border border-gray-200'
-          } shadow-sm hover:shadow-md transition-shadow duration-200 ${
-            message.status === 'failed' ? 'border-red-300 bg-red-50' : ''
+              ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]' 
+              : 'bg-white text-gray-900 rounded-bl-sm border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]'
+          } ${
+            message.status === 'failed' ? 'border-red-300 bg-red-50 shadow-red-100' : ''
           }`}
           id={messageId}
         >
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words font-medium">
             {message.content}
             {isTyping && (
               <span className="inline-block ml-1">
-                <span className="animate-pulse">●</span>
+                <span className="animate-pulse text-blue-300">●</span>
               </span>
             )}
           </p>
           
           {message.intent && !isUser && (
-            <div className="mt-2 text-xs opacity-60" aria-label="Detected intent">
+            <div className="mt-3 text-xs opacity-70 bg-gray-50 px-2 py-1 rounded-full inline-block" aria-label="Detected intent">
               Intent: {message.intent}
             </div>
           )}
@@ -105,7 +107,7 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
           {message.status === 'failed' && onRetry && (
             <button
               onClick={handleRetry}
-              className="mt-2 text-xs text-red-600 hover:text-red-800 underline focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded"
+              className="mt-3 text-xs text-red-600 hover:text-red-800 underline focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded transition-colors duration-200"
               aria-label="Retry sending message"
             >
               Click to retry
@@ -114,13 +116,13 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
         </div>
         
         <div 
-          className={`flex items-center gap-1 mt-1 text-xs text-gray-500 ${
+          className={`flex items-center gap-2 mt-2 text-xs text-gray-500 ${
             isUser ? 'flex-row-reverse' : 'flex-row'
           }`}
           id={timestampId}
           aria-label={`Message timestamp: ${message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
         >
-          <span>{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="font-medium">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           {getStatusIcon()}
         </div>
       </div>
