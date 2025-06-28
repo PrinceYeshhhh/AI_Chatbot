@@ -7,5 +7,6 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
-  base: '/AI_Chatbot/',
+  // Remove base path for Vercel deployment
+  // base: '/AI_Chatbot/',
 });
