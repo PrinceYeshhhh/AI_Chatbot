@@ -196,6 +196,7 @@ export const AuthPage: React.FC = () => {
                           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           placeholder="Choose a username"
                           required={!isLogin}
+                          style={{ color: 'black', backgroundColor: 'white' }}
                         />
                       </div>
                     </div>
@@ -215,6 +216,7 @@ export const AuthPage: React.FC = () => {
                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                         placeholder="Enter your email"
                         required
+                        style={{ color: 'black', backgroundColor: 'white' }}
                       />
                     </div>
                   </div>
@@ -234,6 +236,7 @@ export const AuthPage: React.FC = () => {
                           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           placeholder="+1 (555) 123-4567"
                           required={!isLogin}
+                          style={{ color: 'black', backgroundColor: 'white' }}
                         />
                       </div>
                     </div>
@@ -253,6 +256,7 @@ export const AuthPage: React.FC = () => {
                         className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                         placeholder="Enter your password"
                         required
+                        style={{ color: 'black', backgroundColor: 'white' }}
                       />
                       <button
                         type="button"

@@ -5,16 +5,33 @@ import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { ErrorBoundary, MLErrorBoundary } from './components/ErrorBoundary';
-import { useKeyboardNavigation, CHAT_KEYBOARD_SHORTCUTS } from './hooks/useKeyboardNavigation';
-import { useLiveRegion } from './hooks/useKeyboardNavigation';
+import { useKeyboardNavigation, CHAT_KEYBOARD_SHORTCUTS, useLiveRegion } from './hooks/useKeyboardNavigation';
 import { PerformanceMonitor } from './utils/performanceMonitor';
 import { FeatureTestPanel } from './components/FeatureTestPanel';
+import { TextVisibilityTest } from './components/TextVisibilityTest';
 import IntroAnimation from './components/IntroAnimation';
 
 function App() {
+  const [showIntro, setShowIntro] = React.useState(true);
+
+  // Handle intro completion
+  const handleIntroComplete = () => {
+    setShowIntro(false);
+  };
+
+  // Show intro animation on first load
+  if (showIntro) {
+    return <IntroAnimation onComplete={handleIntroComplete} />;
+  }
+
+  // Only use router hooks after intro is complete
+  return <AppContent />;
+}
+
+// Separate component for the main app content that uses router hooks
+function AppContent() {
   const location = useLocation();
   const { announce } = useLiveRegion('polite');
-  const [showIntro, setShowIntro] = React.useState(true);
 
   // Set up keyboard navigation for the entire app
   useKeyboardNavigation({
@@ -60,7 +77,8 @@ function App() {
     const routeNames: Record<string, string> = {
       '/chat': 'Chat page',
       '/login': 'Login page',
-      '/register': 'Register page'
+      '/register': 'Register page',
+      '/text-visibility-test': 'Text visibility test page'
     };
     
     const routeName = routeNames[location.pathname] || 'Unknown page';
@@ -71,22 +89,11 @@ function App() {
     };
   }, [location.pathname, announce]);
 
-  // Handle intro completion
-  const handleIntroComplete = () => {
-    setShowIntro(false);
-    announce('AI Chatbot loaded successfully');
-  };
-
-  // Show intro animation on first load
-  if (showIntro) {
-    return <IntroAnimation onComplete={handleIntroComplete} />;
-  }
-
   return (
     <ErrorBoundary
       onError={(_error, _errorInfo) => {
         // Handle error silently or log to external service
-        announce('An error occurred in the application');
+        console.log('An error occurred in the application');
       }}
     >
       <div className="app-container" role="application" aria-label="AI Chatbot Application">
@@ -125,6 +132,7 @@ function App() {
               } 
             />
             <Route path="/test" element={<FeatureTestPanel />} />
+            <Route path="/text-visibility-test" element={<TextVisibilityTest />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
           </Routes>
         </AnimatePresence>

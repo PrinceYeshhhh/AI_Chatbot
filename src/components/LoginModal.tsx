@@ -63,6 +63,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200"
                   placeholder="Enter your full name"
                   required={!isLogin}
+                  style={{ color: 'black', backgroundColor: 'white' }}
                 />
               </div>
             )}
@@ -80,6 +81,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                   className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200"
                   placeholder="Enter your email"
                   required
+                  style={{ color: 'black', backgroundColor: 'white' }}
                 />
               </div>
             </div>
@@ -97,6 +99,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                   className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200"
                   placeholder="Enter your password"
                   required
+                  style={{ color: 'black', backgroundColor: 'white' }}
                 />
                 <button
                   type="button"

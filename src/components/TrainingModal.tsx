@@ -217,6 +217,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                       placeholder="Enter the question or input that should trigger this response..."
                       className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       disabled={isTraining}
+                      style={{ color: 'black', backgroundColor: 'white' }}
                     />
                   </div>
                   <div>
@@ -229,6 +230,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                       placeholder="Enter the expected response or answer..."
                       className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       disabled={isTraining}
+                      style={{ color: 'black', backgroundColor: 'white' }}
                     />
                   </div>
                   <button
@@ -267,6 +269,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ color: 'black', backgroundColor: 'white' }}
                   />
                 </div>
                 <select

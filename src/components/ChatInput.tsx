@@ -174,7 +174,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ref={textareaRef}
             value={message}
             onChange={(e) => {
-              console.log('Typing:', e.target.value); // Debug log
               setMessage(e.target.value);
             }}
             onKeyDown={handleKeyDown}
@@ -186,13 +185,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             aria-describedby="message-help message-counter"
             aria-invalid={isOverLimit}
             data-testid="chat-input"
-            style={{ color: 'black', backgroundColor: 'white' }}
+            style={{ 
+              color: 'black', 
+              backgroundColor: 'white',
+              caretColor: 'black'
+            }}
           />
-          
-          {/* Debug: Show current message state */}
-          <div className="text-xs text-gray-500 mt-1">
-            Debug: Message length: {message.length} | Content: "{message.substring(0, 50)}"
-          </div>
           
           {/* Character Count */}
           {message.length > 0 && (
