@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { Bot, Brain, Sparkles, User, Menu } from 'lucide-react';
+import { useChat } from '../hooks/useChat';
 import { Sidebar } from '../components/Sidebar';
-import { ChatMessage } from '../components/ChatMessage';
+import ChatWindow from '../components/ChatWindow';
 import { ChatInput } from '../components/ChatInput';
-import { TypingIndicator } from '../components/TypingIndicator';
 import { SettingsModal } from '../components/SettingsModal';
 import TrainingModal from '../components/TrainingModal';
 import { OnboardingMessage } from '../components/OnboardingMessage';
 import { ChatTemplates } from '../components/ChatTemplates';
 import { VoiceInputButton } from '../components/VoiceInputButton';
 import { SaveChatButton } from '../components/SaveChatButton';
-import { useChat } from '../hooks/useChat';
-import { Bot, Sparkles, Brain, Menu, User } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const ChatPage: React.FC = () => {
   const {
@@ -24,24 +23,18 @@ const ChatPage: React.FC = () => {
     deleteConversation
   } = useChat();
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTrainingOpen, setIsTrainingOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const chatWindowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const hasSeenOnboarding = localStorage.getItem('chatbot-onboarding-seen');
-    if (hasSeenOnboarding) {
-      setShowOnboarding(false);
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (chatWindowRef.current) {
-      chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
-    }
-  }, [currentConversation?.messages.length, isTyping]);
 
   const handleSendMessage = (message: string) => {
     if (showOnboarding) {
@@ -79,6 +72,7 @@ const ChatPage: React.FC = () => {
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+      
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -94,6 +88,7 @@ const ChatPage: React.FC = () => {
           onCloseSidebar={() => setIsSidebarOpen(false)}
         />
       </div>
+
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -107,6 +102,7 @@ const ChatPage: React.FC = () => {
               >
                 <Menu className="w-5 h-5" />
               </button>
+              
               {/* Logo and Brand */}
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -115,7 +111,7 @@ const ChatPage: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      Imperial AI Chatboard
+                      AI Chatbot
                     </h1>
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                       Beta
@@ -128,6 +124,7 @@ const ChatPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            
             <div className="flex items-center gap-3">
               {/* Status Indicators - Hidden on mobile */}
               <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
@@ -144,7 +141,8 @@ const ChatPage: React.FC = () => {
                   <span>Learning</span>
                 </div>
               </div>
-              {/* Login Button (route to /login) */}
+              
+              {/* Login Button */}
               <a
                 href="/login"
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
@@ -155,6 +153,7 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
         </div>
+
         {/* Chat Messages */}
         <div ref={chatWindowRef} className="flex-1 overflow-y-auto">
           {currentConversation ? (
@@ -163,18 +162,21 @@ const ChatPage: React.FC = () => {
               {showOnboarding && (
                 <OnboardingMessage onDismiss={handleDismissOnboarding} />
               )}
+              
               {/* Chat Templates */}
               {currentConversation.messages.length === 0 && !showOnboarding && (
                 <ChatTemplates onTemplateSelect={handleTemplateSelect} />
               )}
-              {/* Messages */}
+              
+              {/* Chat Window */}
               {currentConversation.messages.length > 0 && (
-                <div className="space-y-6">
-                  {currentConversation.messages.map((message) => (
-                    <ChatMessage key={message.id} message={message} />
-                  ))}
-                  {isTyping && <TypingIndicator />}
-                </div>
+                <ChatWindow
+                  messages={currentConversation.messages}
+                  isTyping={isTyping}
+                  showOnboarding={false}
+                  onDismissOnboarding={handleDismissOnboarding}
+                  onTemplateSelect={handleTemplateSelect}
+                />
               )}
             </div>
           ) : (
@@ -184,7 +186,7 @@ const ChatPage: React.FC = () => {
                   <Bot className="w-12 h-12 text-white" />
                 </div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                  Welcome to Imperial AI Chatboard
+                  Welcome to AI Chatbot
                 </h2>
                 <p className="text-gray-600 mb-8 max-w-2xl mx-auto text-lg leading-relaxed">
                   Experience the future of conversational AI powered by state-of-the-art machine learning. 
@@ -201,6 +203,7 @@ const ChatPage: React.FC = () => {
             </div>
           )}
         </div>
+
         {/* Chat Input */}
         {currentConversation && (
           <div className="border-t border-gray-200 bg-white sticky bottom-0 z-10">
@@ -218,6 +221,7 @@ const ChatPage: React.FC = () => {
           </div>
         )}
       </div>
+
       {/* Modals */}
       <SettingsModal
         isOpen={isSettingsOpen}

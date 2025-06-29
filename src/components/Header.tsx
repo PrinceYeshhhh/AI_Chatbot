@@ -1,81 +1,76 @@
 import React from 'react';
-import { Bot, Sparkles, Brain, Menu, User } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Settings, Database, Sparkles, MessageSquare, Brain } from 'lucide-react';
 
 interface HeaderProps {
-  onMenuClick: () => void;
+  onOpenSettings: () => void;
+  onOpenTraining: () => void;
+  onOpenChat: () => void;
+  activeTab: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const navigate = useNavigate();
-
+const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenTraining, onOpenChat, activeTab }) => {
   return (
-    <div className="bg-gradient-to-r from-white to-gray-50 border-b border-gray-200 px-4 lg:px-6 py-4 shadow-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          {/* Mobile Menu Button */}
-          <button
-            onClick={onMenuClick}
-            className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg transition-all duration-300 transform hover:scale-105 active:scale-95"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+    <header className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white shadow-lg border-b border-blue-500/20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
           {/* Logo and Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-blue-200 transform hover:scale-105 transition-all duration-300">
-              <Bot className="w-6 h-6 text-white" />
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-white/20 rounded-lg backdrop-blur-sm">
+              <Brain className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                  Imperial AI Chatboard
-                </h1>
-                <span className="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 text-xs font-semibold rounded-full border border-blue-200 shadow-sm">
-                  Beta
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 hidden sm:flex items-center gap-2">
-                <Brain className="w-4 h-4 text-purple-500" />
-                Advanced AI Assistant with ML/NLP
-              </p>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight">AI Chatbot</h1>
+              <p className="text-xs text-blue-100 opacity-80">Powered by Advanced ML</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Status Indicators - Hidden on mobile */}
-          <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
-            <div className="flex items-center gap-1 px-2 py-1 bg-green-50 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="font-medium">AI Active</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-full">
-              <Brain className="w-3 h-3 text-purple-500" />
-              <span className="font-medium">Neural Networks</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full">
-              <Sparkles className="w-3 h-3 text-blue-500" />
-              <span className="font-medium">Learning</span>
-            </div>
+
+          {/* Navigation Tabs */}
+          <nav className="hidden md:flex items-center space-x-1 bg-white/10 rounded-lg p-1 backdrop-blur-sm">
+            <button
+              onClick={onOpenChat}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-all duration-200 ${
+                activeTab === 'chat'
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-white hover:bg-white/20'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="font-medium">Chat</span>
+            </button>
+            <button
+              onClick={onOpenTraining}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-all duration-200 ${
+                activeTab === 'training'
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-white hover:bg-white/20'
+              }`}
+            >
+              <Database className="w-4 h-4" />
+              <span className="font-medium">Training</span>
+            </button>
+          </nav>
+
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={onOpenTraining}
+              className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              title="Open Training Portal"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="font-medium">Train AI</span>
+            </button>
+            <button
+              onClick={onOpenSettings}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
           </div>
-          {/* Test Panel Button */}
-          <button
-            onClick={() => navigate('/test')}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-            title="Test Advanced Features"
-          >
-            🧪
-          </button>
-          {/* Login Button (route to /login) */}
-          <Link
-            to="/login"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
-          >
-            <User className="w-4 h-4" />
-            <span className="hidden sm:inline">Login</span>
-          </Link>
         </div>
       </div>
-    </div>
+    </header>
   );
 };
 

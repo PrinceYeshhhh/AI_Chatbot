@@ -1,26 +1,44 @@
 import React from 'react';
 import { Bot } from 'lucide-react';
 
-export const TypingIndicator: React.FC = () => {
+interface TypingIndicatorProps {
+  isTyping: boolean;
+  message?: string;
+}
+
+const TypingIndicator: React.FC<TypingIndicatorProps> = ({ isTyping, message = "AI is thinking..." }) => {
+  if (!isTyping) return null;
+
   return (
-    <div className="flex gap-3 mb-6">
-      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg ring-2 ring-purple-200">
-        <Bot className="w-5 h-5 text-white" />
+    <div className="flex items-start space-x-3 mb-4 animate-in slide-in-from-bottom-2 duration-300">
+      {/* Avatar */}
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-md">
+        <Bot className="w-4 h-4 text-white" />
       </div>
-      
-      <div className="flex flex-col">
-        <div className="px-5 py-4 bg-white rounded-2xl rounded-bl-sm border border-gray-200 shadow-lg">
-          <div className="flex space-x-2">
-            <div className="w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
+
+      {/* Typing Bubble */}
+      <div className="flex flex-col space-y-1">
+        {/* Sender Label */}
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span className="font-medium">AI Assistant</span>
+          <span>•</span>
+          <span className="text-purple-600 font-medium">{message}</span>
         </div>
-        
-        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-          <span className="font-medium">AI is typing...</span>
+
+        {/* Typing Animation */}
+        <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
+          <div className="flex items-center space-x-1">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-xs text-gray-500 ml-2">typing...</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default TypingIndicator;

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip } from 'lucide-react';
+import { Send, Mic, Paperclip, Smile, X } from 'lucide-react';
 import { SecurityUtils } from '../utils/security';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { useFocusManagement } from '../hooks/useKeyboardNavigation';
@@ -22,6 +22,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showAttachments, setShowAttachments] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +35,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       updateFocusableElements(containerRef.current);
     }
   }, [updateFocusableElements]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [message]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,80 +83,109 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Ctrl/Cmd + Enter to send message
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit(e as any);
+    }
+    // Shift + Enter for new line
+    else if (e.key === 'Enter' && e.shiftKey) {
+      // Allow default behavior (new line)
+      return;
+    }
+    // Enter to send message
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e as any);
+    }
+    // Escape to clear message
+    else if (e.key === 'Escape') {
+      setMessage('');
+      setShowAttachments(false);
     }
   };
 
-  const handleVoiceRecord = () => {
-    if (disabled || isProcessing) return;
-
-    const performanceTimer = PerformanceMonitor.startTimer('voiceRecording');
-    
-    setIsRecording(!isRecording);
-    
-    if (!isRecording) {
-      // Voice recording functionality would be implemented here
+  const handleVoiceInput = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      setIsRecording(true);
+      // Voice recognition logic would go here
+      // For now, just simulate
+      setTimeout(() => {
+        setIsRecording(false);
+        setMessage(prev => prev + ' Voice input placeholder');
+      }, 2000);
     } else {
-      // Process recorded audio
+      alert('Voice input is not supported in this browser');
     }
-    
-    performanceTimer();
   };
 
-  const handleFileAttach = () => {
-    if (disabled || isProcessing) return;
-    fileInputRef.current?.click();
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Security validation for file
-      const fileName = SecurityUtils.sanitizeInput(file.name);
-      const fileSize = file.size;
-      const maxFileSize = 10 * 1024 * 1024; // 10MB
-      
-      if (fileSize > maxFileSize) {
-        onError?.('File size too large. Maximum size is 10MB.');
-        return;
-      }
-
-      // Validate file type
-      const allowedTypes = [
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-        'text/plain', 'text/markdown', 'text/csv',
-        'application/pdf', 'application/msword', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-      
-      if (!allowedTypes.includes(file.type)) {
-        onError?.('File type not supported. Please select a valid file.');
-        return;
-      }
-
-      setMessage(prev => prev + ` [File: ${fileName}]`);
+      // File upload logic would go here
+      setMessage(prev => prev + ` [Attached: ${file.name}]`);
     }
-    
-    // Reset file input
-    e.target.value = '';
   };
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
-    }
-  }, [message]);
 
   const characterCount = message.length;
   const isOverLimit = characterCount > maxLength;
   const remainingChars = maxLength - characterCount;
 
   return (
-    <div ref={containerRef} className="py-4" role="region" aria-label="Chat input">
+    <div ref={containerRef} className="border-t border-gray-200 bg-white p-4">
+      {/* Attachment Panel */}
+      {showAttachments && (
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-700">Attachments</h3>
+            <button
+              onClick={() => setShowAttachments(false)}
+              className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <label className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <Paperclip className="w-4 h-4 text-gray-600" />
+              <span className="text-sm text-gray-700">File</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.txt,.jpg,.png"
+              />
+            </label>
+            <button
+              onClick={handleVoiceInput}
+              disabled={isRecording}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                isRecording
+                  ? 'bg-red-100 text-red-700 border border-red-300'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Mic className={`w-4 h-4 ${isRecording ? 'animate-pulse' : ''}`} />
+              <span className="text-sm">{isRecording ? 'Recording...' : 'Voice'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Input Form */}
       <form onSubmit={handleSubmit} className="flex items-end gap-3">
+        {/* Attachment Button */}
+        <button
+          type="button"
+          onClick={() => setShowAttachments(!showAttachments)}
+          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Attach files or use voice input"
+        >
+          <Paperclip className="w-5 h-5" />
+        </button>
+
+        {/* Text Input */}
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -156,87 +194,50 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled || isProcessing}
+            className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 min-h-[44px] max-h-[120px]"
             rows={1}
-            maxLength={maxLength}
             aria-label="Message input"
             aria-describedby="message-help message-counter"
             aria-invalid={isOverLimit}
             data-testid="chat-input"
-            className={`w-full resize-none rounded-xl border px-4 py-3 pr-20 focus:ring-2 focus:ring-blue-200 transition-all duration-200 max-h-32 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isOverLimit 
-                ? 'border-red-300 focus:border-red-500' 
-                : 'border-gray-300 focus:border-blue-500'
-            }`}
           />
           
-          {/* Character counter */}
-          <div 
-            id="message-counter"
-            className={`absolute right-2 top-2 text-xs ${
-              isOverLimit ? 'text-red-500' : 'text-gray-400'
-            }`}
-            aria-live="polite"
-          >
-            {characterCount}/{maxLength}
-          </div>
-          
-          <div className="absolute right-2 bottom-2 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleVoiceRecord}
-              disabled={disabled || isProcessing}
-              aria-label={isRecording ? "Stop voice recording" : "Start voice recording"}
-              aria-pressed={isRecording}
-              className={`p-2 transition-all duration-300 rounded-lg shadow-sm hover:shadow-md transform hover:scale-110 active:scale-95 ${
-                isRecording 
-                  ? 'text-red-600 bg-gradient-to-br from-red-50 to-red-100 hover:from-red-100 hover:to-red-200 ring-2 ring-red-200' 
-                  : 'text-gray-500 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 hover:text-gray-700'
-              } disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
-            >
-              <Mic className={`w-4 h-4 ${isRecording ? 'animate-pulse' : ''}`} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={handleFileAttach}
-              disabled={disabled || isProcessing}
-              aria-label="Attach file"
-              className="p-2 text-gray-500 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 hover:text-gray-700 transition-all duration-300 rounded-lg shadow-sm hover:shadow-md transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              <Paperclip className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-          
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="image/*,text/*,.pdf,.doc,.docx"
-            aria-label="File input"
-          />
+          {/* Character Count */}
+          {message.length > 0 && (
+            <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+              {characterCount}/{maxLength}
+            </div>
+          )}
         </div>
-        
+
+        {/* Send Button */}
         <button
           type="submit"
           disabled={!message.trim() || disabled || isProcessing || isOverLimit}
-          aria-label="Send message"
-          aria-describedby="send-button-help"
-          className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 focus:ring-2 focus:ring-blue-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-blue-600 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:transform-none"
+          className={`p-3 rounded-lg transition-all duration-200 ${
+            message.trim() && !disabled
+              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          }`}
+          title="Send message (Ctrl+Enter)"
         >
-          <Send className="w-5 h-5" aria-hidden="true" />
+          <Send className="w-5 h-5" />
           {isProcessing && (
             <span className="sr-only">Sending message...</span>
           )}
         </button>
       </form>
-      
+
+      {/* Keyboard Shortcuts Help */}
+      <div className="mt-2 text-xs text-gray-500 flex items-center gap-4">
+        <span>Ctrl+Enter: Send</span>
+        <span>Shift+Enter: New line</span>
+        <span>Esc: Clear</span>
+      </div>
+
       {/* Help text */}
       <div id="message-help" className="sr-only">
         Type your message here. Use Enter to send, Shift+Enter for new line, or Ctrl+Enter to send.
-      </div>
-      
-      <div id="send-button-help" className="sr-only">
-        Click to send your message. Use Ctrl+Enter as a keyboard shortcut.
       </div>
       
       {/* Character limit warning */}
