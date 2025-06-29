@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, Brain, Download, Trash2, AlertCircle, CheckCircle, Clock, Database, Search, ChevronLeft, ChevronRight, Plus, Filter } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { TrainingData } from '../types';
@@ -26,10 +26,27 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load training data from backend when component mounts
+  useEffect(() => {
+    const loadTrainingData = async () => {
+      try {
+        const data = chatService.getTrainingData();
+        setTrainedData(data);
+      } catch (error) {
+        console.error('Failed to load training data:', error);
+        showFeedbackMessage('Failed to load training data from backend.', 'error');
+      }
+    };
+
+    if (isOpen) {
+      loadTrainingData();
+    }
+  }, [isOpen]);
+
   // Filter and paginate trained data
   const filteredData = trainedData.filter(item => 
-    item.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.answer.toLowerCase().includes(searchTerm.toLowerCase())
+    item.input.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.expectedOutput.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const paginatedData = filteredData.slice(
@@ -56,17 +73,13 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
     setTrainingStatus('training');
 
     try {
-      // Simulate training process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Use actual chatService to add training data
+      const newData = await chatService.addTrainingData(
+        question.trim(),
+        answer.trim(),
+        'custom' // Default intent, could be made configurable
+      );
       
-      const newData: TrainingData = {
-        id: Date.now().toString(),
-        question: question.trim(),
-        answer: answer.trim(),
-        timestamp: new Date(),
-        usageCount: 0
-      };
-
       setTrainedData(prev => [newData, ...prev]);
       setQuestion('');
       setAnswer('');
@@ -78,37 +91,77 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
     } catch (error) {
       setTrainingStatus('error');
       showFeedbackMessage('Failed to add training example. Please try again.', 'error');
+      console.error('Training error:', error);
     } finally {
       setIsTraining(false);
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Simulate file processing
-      showFeedbackMessage(`Processing ${file.name}...`, 'info');
-      setTimeout(() => {
-        showFeedbackMessage(`Successfully processed ${file.name}`, 'success');
-      }, 2000);
+    if (!file) return;
+
+    showFeedbackMessage(`Processing ${file.name}...`, 'info');
+
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.errors && result.errors.length > 0) {
+        throw new Error(result.errors[0].error);
+      }
+
+      showFeedbackMessage(`Successfully processed ${file.name} (${result.summary?.totalChunks || 0} chunks)`, 'success');
+      
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+    } catch (error) {
+      console.error('File upload error:', error);
+      showFeedbackMessage(`Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
 
-  const handleDeleteData = (id: string) => {
-    setTrainedData(prev => prev.filter(item => item.id !== id));
-    showFeedbackMessage('Training data deleted successfully.', 'success');
+  const handleDeleteData = async (id: string) => {
+    try {
+      await chatService.removeTrainingData(id);
+      setTrainedData(prev => prev.filter(item => item.id !== id));
+      showFeedbackMessage('Training data deleted successfully.', 'success');
+    } catch (error) {
+      console.error('Delete error:', error);
+      showFeedbackMessage('Failed to delete training data.', 'error');
+    }
   };
 
-  const handleExportData = () => {
-    const dataStr = JSON.stringify(trainedData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'trained-data.json';
-    link.click();
-    URL.revokeObjectURL(url);
-    showFeedbackMessage('Data exported successfully!', 'success');
+  const handleExportData = async () => {
+    try {
+      const data = await chatService.exportTrainingData();
+      const dataStr = JSON.stringify(data, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'trained-data.json';
+      link.click();
+      URL.revokeObjectURL(url);
+      showFeedbackMessage('Data exported successfully!', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showFeedbackMessage('Failed to export training data.', 'error');
+    }
   };
 
   if (!isOpen) return null;
@@ -191,10 +244,10 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                   <label className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <Upload className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Choose File</span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
                       onChange={handleFileUpload}
                       accept=".txt,.csv,.json,.pdf,.doc,.docx"
                     />
@@ -233,30 +286,30 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                       style={{ color: 'black', backgroundColor: 'white' }}
                     />
                   </div>
-                  <button
-                    onClick={handleAddExample}
+                    <button 
+                      onClick={handleAddExample}
                     disabled={isTraining || !question.trim() || !answer.trim()}
                     className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
                       isTraining || !question.trim() || !answer.trim()
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
                     }`}
-                  >
+                    >
                     {isTraining ? (
                       <div className="flex items-center justify-center space-x-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         <span>Training AI...</span>
-                      </div>
-                    ) : (
+                        </div>
+                      ) : (
                       <div className="flex items-center justify-center space-x-2">
                         <Plus className="w-4 h-4" />
                         <span>Add Training Example</span>
                       </div>
-                    )}
-                  </button>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
           ) : (
             <div className="space-y-4">
               {/* Search and Filter */}
@@ -281,13 +334,13 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                   <option value="recent">Recent</option>
                   <option value="frequent">Most Used</option>
                 </select>
-                <button
-                  onClick={handleExportData}
+                    <button
+                      onClick={handleExportData}
                   className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Export</span>
-                </button>
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export</span>
+                    </button>
               </div>
 
               {/* Data List */}
@@ -297,32 +350,33 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
                     <Database className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p>No training data found</p>
                     <p className="text-sm">Add some training examples to get started</p>
-                  </div>
+                </div>
                 ) : (
                   paginatedData.map((item) => (
                     <div key={item.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="flex items-start justify-between">
+                          <div className="flex items-start justify-between">
                         <div className="flex-1 space-y-2">
-                          <div>
-                            <h4 className="font-medium text-gray-900">Q: {item.question}</h4>
-                            <p className="text-sm text-gray-600 mt-1">A: {item.answer}</p>
+                              <div>
+                            <h4 className="font-medium text-gray-900">Q: {item.input}</h4>
+                            <p className="text-sm text-gray-600 mt-1">A: {item.expectedOutput}</p>
+                              </div>
+                              <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span>Added: {item.dateAdded.toLocaleDateString()}</span>
+                            <span>Intent: {item.intent}</span>
+                            <span>Confidence: {(item.confidence * 100).toFixed(1)}%</span>
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-4 text-xs text-gray-500">
-                            <span>Added: {item.timestamp.toLocaleDateString()}</span>
-                            <span>Used: {item.usageCount} times</span>
-                          </div>
-                        </div>
-                        <button
+                          <button
                           onClick={() => handleDeleteData(item.id)}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete training data"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
               </div>
 
               {/* Pagination */}

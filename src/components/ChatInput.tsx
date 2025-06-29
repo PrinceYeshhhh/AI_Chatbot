@@ -34,7 +34,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || disabled || isProcessing) return;
-
+    
     setIsProcessing(true);
 
     try {
@@ -102,11 +102,40 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // File upload logic would go here
-      setMessage(prev => prev + ` [Attached: ${file.name}]`);
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.errors && result.errors.length > 0) {
+        throw new Error(result.errors[0].error);
+      }
+
+      // Add a reference to the uploaded file in the message
+      setMessage(prev => prev + ` [Uploaded: ${file.name} - ${result.summary?.totalChunks || 0} chunks processed]`);
+      
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+    } catch (error) {
+      console.error('File upload error:', error);
+      onError?.(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -195,11 +224,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Character Count */}
           {message.length > 0 && (
             <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-              {characterCount}/{maxLength}
-            </div>
+            {characterCount}/{maxLength}
+          </div>
           )}
         </div>
-
+        
         {/* Send Button */}
         <button
           type="submit"
@@ -224,7 +253,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <span>Shift+Enter: New line</span>
         <span>Esc: Clear</span>
       </div>
-
+      
       {/* Help text */}
       <div id="message-help" className="sr-only">
         Type your message here. Use Enter to send, Shift+Enter for new line, or Ctrl+Enter to send.

@@ -88,7 +88,7 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
   const timestampId = `timestamp-${message.id}`;
 
   return (
-    <div
+    <div 
       ref={messageRef}
       className={`group flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-in slide-in-from-bottom-2 duration-300`}
       role="article"
@@ -114,8 +114,8 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
               <Clock className="w-3 h-3" />
               <span>{formatTimestamp(message.timestamp)}</span>
             </div>
-          </div>
-
+      </div>
+      
           {/* Message Bubble */}
           <div className={`relative group/message ${
             isUser 
@@ -153,8 +153,8 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
               <div className="flex items-center justify-end mt-2 text-xs opacity-70">
                 <span>✓ Sent</span>
               </div>
-            )}
-          </div>
+          )}
+        </div>
         </div>
       </div>
     </div>

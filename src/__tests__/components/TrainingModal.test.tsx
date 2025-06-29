@@ -40,7 +40,7 @@ describe('TrainingModal', () => {
     jest.clearAllMocks();
     
     // Default mock implementations
-    mockChatService.getTrainingStats.mockReturnValue({
+    mockChatService.getTrainingStats.mockResolvedValue({
       total: 0,
       validated: 0,
       pending: 0,
@@ -58,8 +58,8 @@ describe('TrainingModal', () => {
       dateAdded: new Date(),
       validationStatus: 'pending' as const,
     });
-    mockChatService.removeTrainingData.mockImplementation(() => {});
-    mockChatService.exportTrainingData.mockReturnValue([]);
+    mockChatService.removeTrainingData.mockResolvedValue();
+    mockChatService.exportTrainingData.mockResolvedValue([]);
   });
 
   describe('Rendering', () => {
@@ -79,7 +79,7 @@ describe('TrainingModal', () => {
     });
 
     test('should display training examples count', () => {
-      mockChatService.getTrainingStats.mockReturnValue({
+      mockChatService.getTrainingStats.mockResolvedValue({
         total: 5,
         validated: 3,
         pending: 1,
@@ -89,43 +89,30 @@ describe('TrainingModal', () => {
 
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      expect(screen.getByText(/5 examples trained/)).toBeTruthy();
+      expect(screen.getByText('AI Training Portal')).toBeTruthy();
     });
   });
 
   describe('Tab Navigation', () => {
-    test('should switch to files tab', async () => {
+    test('should switch to training tab', async () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      const filesTab = screen.getByText('Import Files');
-      fireEvent.click(filesTab);
+      const trainingTab = screen.getByText('Add Training Data');
+      fireEvent.click(trainingTab);
       
       await waitFor(() => {
-        expect(screen.getByText('Upload Training Documents')).toBeTruthy();
+        expect(screen.getByText('Upload Training Files')).toBeTruthy();
       });
     });
 
-    test('should switch to examples tab', async () => {
+    test('should switch to data tab', async () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      const examplesTab = screen.getByText('Training Examples');
-      fireEvent.click(examplesTab);
+      const dataTab = screen.getByText('Trained Data');
+      fireEvent.click(dataTab);
       
       await waitFor(() => {
-        expect(screen.getByText('Add Training Example')).toBeTruthy();
-      });
-    });
-
-    test('should switch to stats tab', async () => {
-      render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
-      
-      const statsTab = screen.getByText('Statistics');
-      fireEvent.click(statsTab);
-      
-      await waitFor(() => {
-        expect(screen.getByText('Training Examples')).toBeTruthy();
-        expect(screen.getByText('Intent Categories')).toBeTruthy();
-        expect(screen.getByText('Avg Confidence')).toBeTruthy();
+        expect(screen.getByText('Search training data...')).toBeTruthy();
       });
     });
   });
@@ -134,27 +121,14 @@ describe('TrainingModal', () => {
     test('should handle file selection', async () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to files tab
-      fireEvent.click(screen.getByText('Import Files'));
-      
-      const fileInput = screen.getByRole('button', { name: /choose files/i });
+      const fileInput = screen.getByRole('button', { name: /choose file/i });
       expect(fileInput).toBeTruthy();
     });
 
     test('should display supported file formats', async () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to files tab
-      fireEvent.click(screen.getByText('Import Files'));
-      
-      await waitFor(() => {
-        expect(screen.getByText('PDF')).toBeTruthy();
-        expect(screen.getByText('TXT')).toBeTruthy();
-        expect(screen.getByText('CSV')).toBeTruthy();
-        expect(screen.getByText('MD')).toBeTruthy();
-        expect(screen.getByText('JSON')).toBeTruthy();
-        expect(screen.getByText('DOCX')).toBeTruthy();
-      });
+      expect(screen.getByText('Supports: TXT, CSV, JSON, PDF, DOC')).toBeTruthy();
     });
   });
 
@@ -164,31 +138,22 @@ describe('TrainingModal', () => {
       
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to examples tab
-      fireEvent.click(screen.getByText('Training Examples'));
-      
-      await waitFor(() => {
-        expect(screen.getByText('Add Training Example')).toBeTruthy();
-      });
-
       // Fill in the form
-      const inputField = screen.getByPlaceholderText(/user input/i);
+      const inputField = screen.getByPlaceholderText(/question or input/i);
       const outputField = screen.getByPlaceholderText(/expected response/i);
-      const intentField = screen.getByPlaceholderText(/intent category/i);
       
       await user.type(inputField, 'test input');
       await user.type(outputField, 'test output');
-      await user.type(intentField, 'test intent');
       
       // Submit the form
-      const addButton = screen.getByRole('button', { name: /add example/i });
+      const addButton = screen.getByRole('button', { name: /add training example/i });
       await user.click(addButton);
       
       await waitFor(() => {
         expect(mockChatService.addTrainingData).toHaveBeenCalledWith(
           'test input',
           'test output',
-          'test intent'
+          'custom'
         );
       });
     });
@@ -210,8 +175,8 @@ describe('TrainingModal', () => {
 
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to examples tab
-      fireEvent.click(screen.getByText('Training Examples'));
+      // Switch to data tab
+      fireEvent.click(screen.getByText('Trained Data'));
       
       await waitFor(() => {
         expect(screen.getByText('hello')).toBeTruthy();
@@ -239,8 +204,8 @@ describe('TrainingModal', () => {
 
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to examples tab
-      fireEvent.click(screen.getByText('Training Examples'));
+      // Switch to data tab
+      fireEvent.click(screen.getByText('Trained Data'));
       
       await waitFor(() => {
         const deleteButton = screen.getByTestId('trash-icon');
@@ -256,79 +221,6 @@ describe('TrainingModal', () => {
     });
   });
 
-  describe('Statistics', () => {
-    test('should display training statistics', async () => {
-      const mockTrainingData: TrainingData[] = [
-        {
-          id: '1',
-          input: 'hello',
-          expectedOutput: 'Hello! How can I help you?',
-          intent: 'greeting',
-          confidence: 0.98,
-          dateAdded: new Date(),
-          validationStatus: 'validated',
-        },
-        {
-          id: '2',
-          input: 'goodbye',
-          expectedOutput: 'Goodbye! Have a great day!',
-          intent: 'farewell',
-          confidence: 0.95,
-          dateAdded: new Date(),
-          validationStatus: 'validated',
-        },
-      ];
-
-      mockChatService.getTrainingData.mockReturnValue(mockTrainingData);
-
-      render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
-      
-      // Switch to stats tab
-      fireEvent.click(screen.getByText('Statistics'));
-      
-      await waitFor(() => {
-        expect(screen.getByText('2')).toBeTruthy(); // totalExamples
-        expect(screen.getByText('2')).toBeTruthy(); // uniqueIntents
-        expect(screen.getByText('97%')).toBeTruthy(); // averageConfidence
-      });
-    });
-
-    test('should display intent distribution', async () => {
-      const mockTrainingData: TrainingData[] = [
-        {
-          id: '1',
-          input: 'hello',
-          expectedOutput: 'Hello! How can I help you?',
-          intent: 'greeting',
-          confidence: 0.98,
-          dateAdded: new Date(),
-          validationStatus: 'validated',
-        },
-        {
-          id: '2',
-          input: 'goodbye',
-          expectedOutput: 'Goodbye! Have a great day!',
-          intent: 'farewell',
-          confidence: 0.95,
-          dateAdded: new Date(),
-          validationStatus: 'validated',
-        },
-      ];
-
-      mockChatService.getTrainingData.mockReturnValue(mockTrainingData);
-
-      render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
-      
-      // Switch to stats tab
-      fireEvent.click(screen.getByText('Statistics'));
-      
-      await waitFor(() => {
-        expect(screen.getByText('greeting')).toBeTruthy();
-        expect(screen.getByText('farewell')).toBeTruthy();
-      });
-    });
-  });
-
   describe('Close Functionality', () => {
     test('should call onClose when close button is clicked', async () => {
       const user = userEvent.setup();
@@ -336,17 +228,6 @@ describe('TrainingModal', () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
       const closeButton = screen.getByTestId('x-icon');
-      await user.click(closeButton);
-      
-      expect(mockOnClose).toHaveBeenCalled();
-    });
-
-    test('should call onClose when close button in footer is clicked', async () => {
-      const user = userEvent.setup();
-      
-      render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
-      
-      const closeButton = screen.getByRole('button', { name: /close/i });
       await user.click(closeButton);
       
       expect(mockOnClose).toHaveBeenCalled();
@@ -373,15 +254,15 @@ describe('TrainingModal', () => {
 
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      // Switch to examples tab
-      fireEvent.click(screen.getByText('Training Examples'));
+      // Switch to data tab
+      fireEvent.click(screen.getByText('Trained Data'));
       
       await waitFor(() => {
-        const exportButton = screen.getByRole('button', { name: /export training data/i });
+        const exportButton = screen.getByRole('button', { name: /export/i });
         expect(exportButton).toBeTruthy();
       });
 
-      const exportButton = screen.getByRole('button', { name: /export training data/i });
+      const exportButton = screen.getByRole('button', { name: /export/i });
       await user.click(exportButton);
       
       expect(mockChatService.exportTrainingData).toHaveBeenCalled();

@@ -177,7 +177,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                           settings.theme === value
                             ? 'border-blue-500 bg-blue-50'
                             : 'border-gray-200 hover:border-gray-300'
-                        }`}
+                    }`}
                       >
                         <div className="flex items-center space-x-3 mb-2">
                           <Icon className="w-5 h-5 text-gray-600" />
@@ -213,7 +213,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div>
+                <div>
                     <h4 className="font-medium text-gray-900">Compact Mode</h4>
                     <p className="text-sm text-gray-500">Reduce spacing for more content</p>
                   </div>
@@ -252,7 +252,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       }`}
                     />
                   </button>
-                </div>
+                  </div>
 
                 <div className="flex items-center justify-between">
                   <div>
@@ -313,7 +313,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       }`}
                     />
                   </button>
-                </div>
+            </div>
 
                 {settings.soundEnabled && (
                   <div className="bg-gray-50 rounded-lg p-4">
