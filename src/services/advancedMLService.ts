@@ -1,5 +1,5 @@
-import { Message, TrainingData, MLResult, IntentClassificationResult, EntityRecognitionResult } from '../types';
-import { PerformanceMonitor, timer } from '../utils/performanceMonitor';
+import { TrainingData, IntentClassificationResult, EntityRecognitionResult } from '../types';
+import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { SecurityUtils } from '../utils/security';
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
@@ -185,7 +185,7 @@ class AdvancedMLService {
   // BERT-LIKE CONTEXTUAL EMBEDDINGS
   private initializeBERTComponents(): void {
     // WordPiece tokenization simulation
-    const commonSubwords = ['##ing', '##ed', '##er', '##est', '##ly', '##tion', '##ness', '##ment'];
+    const _commonSubwords = ['##ing', '##ed', '##er', '##est', '##ly', '##tion', '##ness', '##ment'];
     
     // Initialize contextual embeddings with bidirectional context
     this.contextualEmbeddings.set('[CLS]', this.randomVector(this.embeddingDim));
@@ -218,9 +218,7 @@ class AdvancedMLService {
   // RETRIEVAL-BASED MODELS (TF-IDF, BM25)
   private initializeRetrievalModels(): void {
     // TF-IDF will be computed dynamically
-    // BM25 parameters
-    const k1 = 1.2;
-    const b = 0.75;
+    // BM25 parameters are configured elsewhere
     
     // Initialize Siamese Network for similarity learning
     this.siameseNetworkWeights = [
@@ -387,10 +385,6 @@ class AdvancedMLService {
     const attentionWeights: number[][] = [];
     
     for (let head = 0; head < this.numHeads; head++) {
-      const queryWeights = this.multiHeadAttention.get(`head_${head}_query`)!;
-      const keyWeights = this.multiHeadAttention.get(`head_${head}_key`)!;
-      const valueWeights = this.multiHeadAttention.get(`head_${head}_value`)!;
-      
       // Simplified attention computation
       const headAttention = embeddings.map(() => 
         embeddings.map(() => Math.random())
@@ -419,7 +413,7 @@ class AdvancedMLService {
     });
   }
 
-  private generateContextualRepresentation(embeddings: number[][], attentionWeights: number[][]): number[] {
+  private generateContextualRepresentation(embeddings: number[][], _attentionWeights: number[][]): number[] {
     // Simplified contextual representation generation
     const avgEmbedding = embeddings.reduce((acc, embedding) => 
       acc.map((val, i) => val + embedding[i]), 

@@ -166,7 +166,7 @@ export const VirtualConversationList: React.FC<{
 }) => {
   const ITEM_HEIGHT = 80; // Height of each conversation item
 
-  const renderConversationItem = React.useCallback((conversation: any, index: number) => (
+  const renderConversationItem = React.useCallback((conversation: any, _index: number) => (
     <div
       key={conversation.id}
       className={`group relative rounded-xl transition-all duration-300 p-3 ${

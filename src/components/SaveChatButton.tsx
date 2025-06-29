@@ -6,7 +6,7 @@ interface SaveChatButtonProps {
   conversation: Conversation;
 }
 
-export const SaveChatButton: React.FC<SaveChatButtonProps> = ({ conversation }) => {
+export const SaveChatButton: React.FC<SaveChatButtonProps> = ({ conversation: _conversation }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [showModal, setShowModal] = useState(false);
 

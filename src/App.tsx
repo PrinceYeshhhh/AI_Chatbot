@@ -12,8 +12,6 @@ import { FeatureTestPanel } from './components/FeatureTestPanel';
 import IntroAnimation from './components/IntroAnimation';
 
 function App() {
-  console.log('App component loading...'); // Debug log
-  
   const location = useLocation();
   const { announce } = useLiveRegion('polite');
   const [showIntro, setShowIntro] = React.useState(true);
@@ -86,8 +84,8 @@ function App() {
 
   return (
     <ErrorBoundary
-      onError={(error, errorInfo) => {
-        console.error('App Error:', error, errorInfo);
+      onError={(_error, _errorInfo) => {
+        // Handle error silently or log to external service
         announce('An error occurred in the application');
       }}
     >

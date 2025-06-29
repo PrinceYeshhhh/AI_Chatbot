@@ -37,10 +37,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!message.trim() || disabled || isProcessing) {
-      return;
-    }
+    if (!message.trim() || disabled || isProcessing) return;
 
     const performanceTimer = PerformanceMonitor.startTimer('messageSubmission');
     setIsProcessing(true);
@@ -77,18 +74,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl/Cmd + Enter to send message
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-    // Shift + Enter for new line
-    else if (e.key === 'Enter' && e.shiftKey) {
-      // Allow default behavior (new line)
-      return;
-    }
-    // Enter to send message
-    else if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -102,10 +88,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setIsRecording(!isRecording);
     
     if (!isRecording) {
-      console.log('Starting voice recording...');
       // Voice recording functionality would be implemented here
     } else {
-      console.log('Stopping voice recording...');
       // Process recorded audio
     }
     
@@ -143,7 +127,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
 
-      console.log('File selected:', fileName);
       setMessage(prev => prev + ` [File: ${fileName}]`);
     }
     

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Plus, Settings, Database, X, Sparkles } from 'lucide-react';
 import { Conversation } from '../types';
-import { Plus, MessageSquare, Trash2, Settings, Database, X, Sparkles } from 'lucide-react';
 import { VirtualConversationList } from './VirtualList';
 
 interface SidebarProps {
@@ -8,7 +8,7 @@ interface SidebarProps {
   currentConversation: Conversation | null;
   onNewConversation: () => void;
   onSelectConversation: (conversation: Conversation) => void;
-  onDeleteConversation: (conversationId: string) => void;
+  onDeleteConversation?: (conversationId: string) => void;
   onOpenTraining: () => void;
   onOpenSettings: () => void;
   onCloseSidebar?: () => void;
@@ -24,19 +24,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   onCloseSidebar
 }) => {
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const handleDeleteConversation = async (conversationId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setDeletingId(conversationId);
-    
-    setTimeout(() => {
-      onDeleteConversation(conversationId);
-      setDeletingId(null);
-    }, 200);
-  };
-
   const handleNewConversation = () => {
     onNewConversation();
     onCloseSidebar?.();
@@ -93,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           conversations={conversations}
           currentConversationId={currentConversation?.id ?? ''}
           onSelectConversation={handleSelectConversation}
-          onDeleteConversation={onDeleteConversation}
+          onDeleteConversation={onDeleteConversation ?? (() => {})}
           height={600}
         />
       </div>

@@ -1,6 +1,6 @@
-import { Message, ApiConfig, TrainingData, IntentClassificationResult } from '../types';
+import { Message, ApiConfig, TrainingData } from '../types';
 import { SecurityUtils } from '../utils/security';
-import { PerformanceMonitor, timer } from '../utils/performanceMonitor';
+import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { workerService } from './workerService';
 import { cacheService } from './cacheService';
 import { errorTrackingService } from './errorTrackingService';
@@ -237,7 +237,7 @@ class ChatService {
                 fullResponse = parsed.fullResponse;
                 break;
               }
-            } catch (e) {
+            } catch {
               // Ignore parsing errors for individual chunks
             }
           }
@@ -257,7 +257,7 @@ class ChatService {
     };
   }
 
-  private async processMessageLocally(message: string, conversationHistory: Message[]): Promise<Message> {
+  private async processMessageLocally(_message: string, _conversationHistory: Message[]): Promise<Message> {
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
 
@@ -360,10 +360,6 @@ class ChatService {
         timestamp: new Date().toISOString()
       });
 
-      console.log(`🎯 Model trained successfully: ${result.modelId}`);
-      console.log(`📊 Final accuracy: ${(result.finalAccuracy * 100).toFixed(1)}%`);
-      console.log(`⏱️ Training time: ${(result.trainingTime / 1000).toFixed(1)}s`);
-
       timer();
       return result;
 
@@ -414,10 +410,6 @@ class ChatService {
         trainingDataCount: trainingData.length,
         timestamp: new Date().toISOString()
       });
-
-      console.log(`🎯 Hyperparameter optimization completed`);
-      console.log(`📊 Best score: ${(result.bestScore * 100).toFixed(1)}%`);
-      console.log(`⚙️ Best parameters:`, result.bestParams);
 
       timer();
       return result;

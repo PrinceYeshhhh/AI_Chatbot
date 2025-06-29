@@ -1,8 +1,10 @@
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom';
 import TrainingModal from '../../components/TrainingModal';
 import { chatService } from '../../services/chatService';
+import { TrainingData } from '../../types';
 
 // Mock the chatService
 jest.mock('../../services/chatService', () => ({
@@ -54,9 +56,9 @@ describe('TrainingModal', () => {
       intent: 'test intent',
       confidence: 0.98,
       dateAdded: new Date(),
-      validationStatus: 'pending',
+      validationStatus: 'pending' as const,
     });
-    mockChatService.removeTrainingData.mockImplementation();
+    mockChatService.removeTrainingData.mockImplementation(() => {});
     mockChatService.exportTrainingData.mockReturnValue([]);
   });
 
@@ -64,16 +66,16 @@ describe('TrainingModal', () => {
     test('should render when open', () => {
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      expect(screen.getByText('AI Training Center')).toBeInTheDocument();
-      expect(screen.getByText('Import Files')).toBeInTheDocument();
-      expect(screen.getByText('Training Examples')).toBeInTheDocument();
-      expect(screen.getByText('Statistics')).toBeInTheDocument();
+      expect(screen.getByText('AI Training Center')).toBeTruthy();
+      expect(screen.getByText('Import Files')).toBeTruthy();
+      expect(screen.getByText('Training Examples')).toBeTruthy();
+      expect(screen.getByText('Statistics')).toBeTruthy();
     });
 
     test('should not render when closed', () => {
       render(<TrainingModal isOpen={false} onClose={mockOnClose} />);
       
-      expect(screen.queryByText('AI Training Center')).not.toBeInTheDocument();
+      expect(screen.queryByText('AI Training Center')).toBeNull();
     });
 
     test('should display training examples count', () => {
@@ -87,7 +89,7 @@ describe('TrainingModal', () => {
 
       render(<TrainingModal isOpen={true} onClose={mockOnClose} />);
       
-      expect(screen.getByText(/5 examples trained/)).toBeInTheDocument();
+      expect(screen.getByText(/5 examples trained/)).toBeTruthy();
     });
   });
 
@@ -99,7 +101,7 @@ describe('TrainingModal', () => {
       fireEvent.click(filesTab);
       
       await waitFor(() => {
-        expect(screen.getByText('Upload Training Documents')).toBeInTheDocument();
+        expect(screen.getByText('Upload Training Documents')).toBeTruthy();
       });
     });
 
@@ -110,7 +112,7 @@ describe('TrainingModal', () => {
       fireEvent.click(examplesTab);
       
       await waitFor(() => {
-        expect(screen.getByText('Add Training Example')).toBeInTheDocument();
+        expect(screen.getByText('Add Training Example')).toBeTruthy();
       });
     });
 
@@ -121,9 +123,9 @@ describe('TrainingModal', () => {
       fireEvent.click(statsTab);
       
       await waitFor(() => {
-        expect(screen.getByText('Training Examples')).toBeInTheDocument();
-        expect(screen.getByText('Intent Categories')).toBeInTheDocument();
-        expect(screen.getByText('Avg Confidence')).toBeInTheDocument();
+        expect(screen.getByText('Training Examples')).toBeTruthy();
+        expect(screen.getByText('Intent Categories')).toBeTruthy();
+        expect(screen.getByText('Avg Confidence')).toBeTruthy();
       });
     });
   });
@@ -136,7 +138,7 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Import Files'));
       
       const fileInput = screen.getByRole('button', { name: /choose files/i });
-      expect(fileInput).toBeInTheDocument();
+      expect(fileInput).toBeTruthy();
     });
 
     test('should display supported file formats', async () => {
@@ -146,12 +148,12 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Import Files'));
       
       await waitFor(() => {
-        expect(screen.getByText('PDF')).toBeInTheDocument();
-        expect(screen.getByText('TXT')).toBeInTheDocument();
-        expect(screen.getByText('CSV')).toBeInTheDocument();
-        expect(screen.getByText('MD')).toBeInTheDocument();
-        expect(screen.getByText('JSON')).toBeInTheDocument();
-        expect(screen.getByText('DOCX')).toBeInTheDocument();
+        expect(screen.getByText('PDF')).toBeTruthy();
+        expect(screen.getByText('TXT')).toBeTruthy();
+        expect(screen.getByText('CSV')).toBeTruthy();
+        expect(screen.getByText('MD')).toBeTruthy();
+        expect(screen.getByText('JSON')).toBeTruthy();
+        expect(screen.getByText('DOCX')).toBeTruthy();
       });
     });
   });
@@ -166,7 +168,7 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Training Examples'));
       
       await waitFor(() => {
-        expect(screen.getByText('Add Training Example')).toBeInTheDocument();
+        expect(screen.getByText('Add Training Example')).toBeTruthy();
       });
 
       // Fill in the form
@@ -192,7 +194,7 @@ describe('TrainingModal', () => {
     });
 
     test('should display existing training examples', async () => {
-      const mockTrainingData = [
+      const mockTrainingData: TrainingData[] = [
         {
           id: '1',
           input: 'hello',
@@ -212,16 +214,16 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Training Examples'));
       
       await waitFor(() => {
-        expect(screen.getByText('hello')).toBeInTheDocument();
-        expect(screen.getByText('Hello! How can I help you?')).toBeInTheDocument();
-        expect(screen.getByText('greeting')).toBeInTheDocument();
+        expect(screen.getByText('hello')).toBeTruthy();
+        expect(screen.getByText('Hello! How can I help you?')).toBeTruthy();
+        expect(screen.getByText('greeting')).toBeTruthy();
       });
     });
 
     test('should delete training example', async () => {
       const user = userEvent.setup();
       
-      const mockTrainingData = [
+      const mockTrainingData: TrainingData[] = [
         {
           id: '1',
           input: 'hello',
@@ -242,7 +244,7 @@ describe('TrainingModal', () => {
       
       await waitFor(() => {
         const deleteButton = screen.getByTestId('trash-icon');
-        expect(deleteButton).toBeInTheDocument();
+        expect(deleteButton).toBeTruthy();
       });
 
       const deleteButton = screen.getByTestId('trash-icon');
@@ -256,7 +258,7 @@ describe('TrainingModal', () => {
 
   describe('Statistics', () => {
     test('should display training statistics', async () => {
-      const mockTrainingData = [
+      const mockTrainingData: TrainingData[] = [
         {
           id: '1',
           input: 'hello',
@@ -285,14 +287,14 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Statistics'));
       
       await waitFor(() => {
-        expect(screen.getByText('2')).toBeInTheDocument(); // totalExamples
-        expect(screen.getByText('2')).toBeInTheDocument(); // uniqueIntents
-        expect(screen.getByText('97%')).toBeInTheDocument(); // averageConfidence
+        expect(screen.getByText('2')).toBeTruthy(); // totalExamples
+        expect(screen.getByText('2')).toBeTruthy(); // uniqueIntents
+        expect(screen.getByText('97%')).toBeTruthy(); // averageConfidence
       });
     });
 
     test('should display intent distribution', async () => {
-      const mockTrainingData = [
+      const mockTrainingData: TrainingData[] = [
         {
           id: '1',
           input: 'hello',
@@ -321,8 +323,8 @@ describe('TrainingModal', () => {
       fireEvent.click(screen.getByText('Statistics'));
       
       await waitFor(() => {
-        expect(screen.getByText('greeting')).toBeInTheDocument();
-        expect(screen.getByText('farewell')).toBeInTheDocument();
+        expect(screen.getByText('greeting')).toBeTruthy();
+        expect(screen.getByText('farewell')).toBeTruthy();
       });
     });
   });
@@ -355,7 +357,7 @@ describe('TrainingModal', () => {
     test('should export training data', async () => {
       const user = userEvent.setup();
       
-      const mockTrainingData = [
+      const mockTrainingData: TrainingData[] = [
         {
           id: '1',
           input: 'hello',
@@ -376,7 +378,7 @@ describe('TrainingModal', () => {
       
       await waitFor(() => {
         const exportButton = screen.getByRole('button', { name: /export training data/i });
-        expect(exportButton).toBeInTheDocument();
+        expect(exportButton).toBeTruthy();
       });
 
       const exportButton = screen.getByRole('button', { name: /export training data/i });

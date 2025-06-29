@@ -1,3 +1,4 @@
+import { TrainingData } from '../types';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 
 interface WorkerMessage {
@@ -14,6 +15,22 @@ interface WorkerResponse {
 }
 
 type WorkerCallback = (response: WorkerResponse) => void;
+
+// Local type definitions for worker service
+interface ModelConfig {
+  epochs: number;
+  batchSize: number;
+  learningRate: number;
+  modelType: string;
+  [key: string]: any;
+}
+
+interface OptimizationConfig {
+  trials: number;
+  modelType: string;
+  searchSpace: Record<string, any[]>;
+  [key: string]: any;
+}
 
 /**
  * Service for managing Web Worker communications
@@ -36,10 +53,7 @@ class WorkerService {
       this.worker.onmessage = this.handleWorkerMessage.bind(this);
       this.worker.onerror = this.handleWorkerError.bind(this);
       this.isInitialized = true;
-      
-      console.log('🚀 Web Worker initialized successfully');
     } catch (error) {
-      console.error('❌ Failed to initialize Web Worker:', error);
       throw new Error('Web Worker initialization failed');
     }
   }
@@ -53,7 +67,6 @@ class WorkerService {
       this.worker = null;
       this.isInitialized = false;
       this.callbacks.clear();
-      console.log('🛑 Web Worker terminated');
     }
   }
 
