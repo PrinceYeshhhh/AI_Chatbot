@@ -339,12 +339,5 @@ class WorkerService {
 // Export singleton instance
 export const workerService = new WorkerService();
 
-// Auto-initialize worker service
-if (typeof window !== 'undefined') {
-  // Only initialize in browser environment
-  try {
-    workerService.initialize();
-  } catch (error) {
-    console.warn('Web Worker initialization failed, falling back to main thread:', error);
-  }
-} 
+// Note: Initialize the worker service when needed in components
+// Don't auto-initialize here to avoid React hook context issues 

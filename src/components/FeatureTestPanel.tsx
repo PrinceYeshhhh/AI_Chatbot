@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { workerService } from '../services/workerService';
 import { cacheService } from '../services/cacheService';
 import { errorTrackingService } from '../services/errorTrackingService';
@@ -16,6 +16,20 @@ interface TestResult {
 export const FeatureTestPanel: React.FC = () => {
   const [results, setResults] = useState<TestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [workerInitialized, setWorkerInitialized] = useState(false);
+
+  // Initialize worker service when component mounts
+  useEffect(() => {
+    try {
+      if (!workerService.isAvailable()) {
+        workerService.initialize();
+      }
+      setWorkerInitialized(true);
+    } catch (error) {
+      console.warn('Worker service initialization failed:', error);
+      setWorkerInitialized(false);
+    }
+  }, []);
 
   const addResult = (result: TestResult) => {
     setResults(prev => [...prev, result]);
@@ -26,6 +40,10 @@ export const FeatureTestPanel: React.FC = () => {
     addResult({ id: testId, feature: 'Web Worker - Intent Classification', status: 'running' });
 
     try {
+      if (!workerInitialized) {
+        throw new Error('Worker service not initialized');
+      }
+
       const timer = PerformanceMonitor.startTimer('test-intent-classification');
       const result = await workerService.classifyIntent("Hello, how can you help me?");
       const duration = timer();
@@ -52,6 +70,10 @@ export const FeatureTestPanel: React.FC = () => {
     addResult({ id: testId, feature: 'Web Worker - Entity Extraction', status: 'running' });
 
     try {
+      if (!workerInitialized) {
+        throw new Error('Worker service not initialized');
+      }
+
       const timer = PerformanceMonitor.startTimer('test-entity-extraction');
       const result = await workerService.extractEntities("My email is test@example.com and phone is 555-1234");
       const duration = timer();

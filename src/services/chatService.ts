@@ -1,7 +1,6 @@
 import { Message, ApiConfig, TrainingData } from '../types';
 import { SecurityUtils } from '../utils/security';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
-import { workerService } from './workerService';
 import { cacheService } from './cacheService';
 import { errorTrackingService } from './errorTrackingService';
 
@@ -92,6 +91,8 @@ class ChatService {
       // Use Web Worker for intent classification
       let intent = 'general';
       try {
+        // Lazy load workerService
+        const { workerService } = await import('./workerService');
         const intentResult = await workerService.classifyIntent(message);
         intent = intentResult.intent;
         console.log(`🎯 Intent classified: ${intent} (${(intentResult.confidence * 100).toFixed(1)}%)`);
@@ -107,6 +108,8 @@ class ChatService {
       // Use Web Worker for entity extraction
       let entities: any[] = [];
       try {
+        // Lazy load workerService
+        const { workerService } = await import('./workerService');
         const entityResult = await workerService.extractEntities(message);
         entities = entityResult.entities;
         if (entities.length > 0) {
@@ -292,6 +295,7 @@ class ChatService {
       });
 
       // Use Web Worker to process training data
+      const { workerService } = await import('./workerService');
       const processedData = await workerService.processTrainingData([{
         input,
         expectedOutput,
@@ -351,6 +355,7 @@ class ChatService {
         modelType: 'intent_classifier'
       };
 
+      const { workerService } = await import('./workerService');
       const result = await workerService.trainModel(trainingData, modelConfig, onProgress);
 
       // Cache the trained model info
@@ -397,6 +402,7 @@ class ChatService {
         }
       };
 
+      const { workerService } = await import('./workerService');
       const result = await workerService.optimizeHyperparameters(
         'intent_classifier',
         trainingData,
@@ -528,5 +534,14 @@ class ChatService {
   }
 }
 
-// Export singleton instance
-export const chatService = new ChatService();
+// Export singleton instance with lazy initialization
+let chatServiceInstance: ChatService | null = null;
+
+export const chatService = new Proxy({} as ChatService, {
+  get(target, prop) {
+    if (!chatServiceInstance) {
+      chatServiceInstance = new ChatService();
+    }
+    return chatServiceInstance[prop as keyof ChatService];
+  }
+});

@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip, Smile, X } from 'lucide-react';
-import { SecurityUtils } from '../utils/security';
-import { PerformanceMonitor } from '../utils/performanceMonitor';
-import { useFocusManagement } from '../hooks/useKeyboardNavigation';
+import { Send, Mic, Paperclip, X } from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -25,16 +22,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [showAttachments, setShowAttachments] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Focus management for accessibility
-  const { updateFocusableElements, focusFirstElement } = useFocusManagement();
-
-  useEffect(() => {
-    if (containerRef.current) {
-      updateFocusableElements(containerRef.current);
-    }
-  }, [updateFocusableElements]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -48,26 +35,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     e.preventDefault();
     if (!message.trim() || disabled || isProcessing) return;
 
-    const performanceTimer = PerformanceMonitor.startTimer('messageSubmission');
     setIsProcessing(true);
 
     try {
-      // Security validation
-      const sanitizedMessage = SecurityUtils.sanitizeInput(message.trim());
-      const validation = SecurityUtils.validateMessageContent(sanitizedMessage);
+      const trimmedMessage = message.trim();
       
-      if (!validation.isValid) {
-        onError?.(validation.error || 'Invalid message');
+      // Basic validation
+      if (trimmedMessage.length === 0) {
+        onError?.('Message cannot be empty');
         return;
       }
 
-      // Check for malicious content
-      if (SecurityUtils.containsMaliciousContent(sanitizedMessage)) {
-        onError?.('Message contains potentially harmful content');
+      if (trimmedMessage.length > maxLength) {
+        onError?.(`Message is too long. Maximum ${maxLength} characters allowed.`);
         return;
       }
 
-      await onSendMessage(sanitizedMessage);
+      await onSendMessage(trimmedMessage);
       setMessage('');
       
       // Reset textarea height
@@ -78,7 +62,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       onError?.(error instanceof Error ? error.message : 'Failed to send message');
     } finally {
       setIsProcessing(false);
-      performanceTimer();
     }
   };
 
@@ -132,7 +115,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const remainingChars = maxLength - characterCount;
 
   return (
-    <div ref={containerRef} className="border-t border-gray-200 bg-white p-4">
+    <div className="border-t border-gray-200 bg-white p-4">
       {/* Attachment Panel */}
       {showAttachments && (
         <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -190,17 +173,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              console.log('Typing:', e.target.value); // Debug log
+              setMessage(e.target.value);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled || isProcessing}
-            className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 min-h-[44px] max-h-[120px]"
+            className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 min-h-[44px] max-h-[120px] text-black bg-white"
             rows={1}
             aria-label="Message input"
             aria-describedby="message-help message-counter"
             aria-invalid={isOverLimit}
             data-testid="chat-input"
+            style={{ color: 'black', backgroundColor: 'white' }}
           />
+          
+          {/* Debug: Show current message state */}
+          <div className="text-xs text-gray-500 mt-1">
+            Debug: Message length: {message.length} | Content: "{message.substring(0, 50)}"
+          </div>
           
           {/* Character Count */}
           {message.length > 0 && (
@@ -215,7 +207,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           type="submit"
           disabled={!message.trim() || disabled || isProcessing || isOverLimit}
           className={`p-3 rounded-lg transition-all duration-200 ${
-            message.trim() && !disabled
+            message.trim() && !disabled && !isProcessing && !isOverLimit
               ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'
           }`}
