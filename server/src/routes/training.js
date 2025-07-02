@@ -3,11 +3,162 @@ import { vectorService } from '../services/vectorService.js';
 import { documentProcessor } from '../services/documentProcessor.js';
 import { logger } from '../utils/logger.js';
 import { validateTrainingData, validateBulkTrainingData } from '../middleware/validation.js';
+import rateLimit from 'express-rate-limit';
+import slowDown from 'express-slow-down';
 
 const router = express.Router();
 
+// Per-IP rate limiter for training endpoint
+const trainingLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute per IP
+  message: { error: 'Too many training requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Throttle repeated requests
+const trainingSpeedLimiter = slowDown({
+  windowMs: 60 * 1000, // 1 minute
+  delayAfter: 5, // allow 5 requests at full speed, then...
+  delayMs: 1000, // ...add 1s per request above 5
+});
+
+/**
+ * @openapi
+ * /training:
+ *   post:
+ *     summary: Add a single training example
+ *     tags:
+ *       - Training
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               input:
+ *                 type: string
+ *               expectedOutput:
+ *                 type: string
+ *               intent:
+ *                 type: string
+ *               confidence:
+ *                 type: number
+ *             required:
+ *               - input
+ *               - expectedOutput
+ *               - intent
+ *     responses:
+ *       200:
+ *         description: Training example added successfully
+ *       400:
+ *         description: Invalid training data
+ *       429:
+ *         description: Too many requests (rate limited)
+ *       500:
+ *         description: Failed to add training example
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /training/bulk:
+ *   post:
+ *     summary: Add multiple training examples
+ *     tags:
+ *       - Training
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               properties:
+ *                 input:
+ *                   type: string
+ *                 expectedOutput:
+ *                   type: string
+ *                 intent:
+ *                   type: string
+ *                 confidence:
+ *                   type: number
+ *     responses:
+ *       200:
+ *         description: Training examples processed
+ *       207:
+ *         description: Some training examples failed
+ *       400:
+ *         description: Invalid training data
+ *       429:
+ *         description: Too many requests (rate limited)
+ *       500:
+ *         description: Bulk training failed
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /training/stats:
+ *   get:
+ *     summary: Get training statistics
+ *     tags:
+ *       - Training
+ *     responses:
+ *       200:
+ *         description: Training and vector store stats
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /training/clear:
+ *   delete:
+ *     summary: Clear all training data
+ *     tags:
+ *       - Training
+ *     responses:
+ *       200:
+ *         description: All training data cleared
+ *       500:
+ *         description: Failed to clear training data
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /training/{id}:
+ *   delete:
+ *     summary: Delete a specific training example
+ *     tags:
+ *       - Training
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Training example deleted
+ *       500:
+ *         description: Failed to delete training example
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /training/export:
+ *   get:
+ *     summary: Export all training data
+ *     tags:
+ *       - Training
+ *     responses:
+ *       200:
+ *         description: Exported training data
+ *     security:
+ *       - bearerAuth: []
+ *
+ * TODO: Document any additional endpoints or clarify ambiguous ones.
+ */
+
+// TODO: Consider adding persistent storage (e.g., database) for training metadata, not just vector DB.
+
 // POST /api/training - Add single training example
-router.post('/', validateTrainingData, async (req, res) => {
+router.post('/', trainingLimiter, trainingSpeedLimiter, validateTrainingData, async (req, res) => {
   try {
     const { input, expectedOutput, intent, confidence } = req.body;
     
@@ -159,6 +310,66 @@ router.delete('/clear', async (req, res) => {
     logger.error('Error clearing training data:', error);
     res.status(500).json({
       error: 'Failed to clear training data',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /api/training/:id - Delete specific training example
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    logger.info(`Deleting training example: ${id}`);
+    
+    // Delete from vector store by metadata
+    await vectorService.deleteDocument(id);
+    
+    res.json({
+      message: 'Training example deleted successfully',
+      id
+    });
+
+  } catch (error) {
+    logger.error('Error deleting training example:', error);
+    res.status(500).json({
+      error: 'Failed to delete training example',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/training/export - Export all training data
+router.get('/export', async (req, res) => {
+  try {
+    logger.info('Exporting training data');
+    
+    // Get all documents from vector store
+    const allDocs = await vectorService.getAllDocuments();
+    
+    // Filter and format training data
+    const trainingData = allDocs
+      .filter(doc => doc.metadata.type === 'training_data')
+      .map(doc => ({
+        id: doc.metadata.filename,
+        input: doc.metadata.input || '',
+        expectedOutput: doc.metadata.expectedOutput || '',
+        intent: doc.metadata.intent || 'custom',
+        confidence: doc.metadata.confidence || 0.98,
+        dateAdded: doc.metadata.uploadedAt || new Date().toISOString(),
+        validationStatus: 'validated'
+      }));
+    
+    res.json({
+      trainingData,
+      count: trainingData.length,
+      exportedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Error exporting training data:', error);
+    res.status(500).json({
+      error: 'Failed to export training data',
       message: error.message
     });
   }

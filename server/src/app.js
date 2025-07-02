@@ -8,6 +8,11 @@ import slowDown from 'express-slow-down';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+// Import env validation
+import { validateEnv } from './utils/schemas.js';
 
 // Import routes
 import chatRoutes from './routes/chat.js';
@@ -23,14 +28,23 @@ import { errorHandler } from './middleware/errorHandler.js';
 // Load environment variables
 dotenv.config();
 
+// Validate environment variables
+try {
+  validateEnv();
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error(err.message);
+  process.exit(1);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3003;
 
 // Security middleware
-if (process.env.ENABLE_HELMET === 'true') {
+if (process.env.NODE_ENV === 'production' || process.env.ENABLE_HELMET === 'true') {
   app.use(helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
@@ -45,13 +59,21 @@ if (process.env.ENABLE_HELMET === 'true') {
 }
 
 // Compression middleware
-if (process.env.ENABLE_COMPRESSION === 'true') {
+if (process.env.NODE_ENV === 'production' || process.env.ENABLE_COMPRESSION === 'true') {
   app.use(compression());
 }
 
 // CORS configuration
+const isProduction = process.env.NODE_ENV === 'production';
+let corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+if (isProduction) {
+  // Never allow '*' in production
+  if (corsOrigin === '*' || !corsOrigin) {
+    throw new Error('CORS_ORIGIN must be a trusted URL in production, not "*" or empty.');
+  }
+}
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -72,7 +94,7 @@ const limiter = rateLimit({
 const speedLimiter = slowDown({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   delayAfter: 50,
-  delayMs: parseInt(process.env.SLOW_DOWN_DELAY_MS) || 500,
+  delayMs: () => 500,
 });
 
 app.use(limiter);
@@ -110,19 +132,67 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/status', statusRoutes);
+app.get('/api/ping', (req, res) => res.status(200).send('pong'));
 
-// 404 handler
-app.use('*', (req, res) => {
+// Swagger/OpenAPI setup
+const swaggerDefinition = {
+  openapi: '3.0.0',
+  info: {
+    title: 'AI Chatbot Backend API',
+    version: '1.0.0',
+    description: 'API documentation for the AI Chatbot backend',
+  },
+  servers: [
+    { url: `http://localhost:${PORT}/api` },
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+    },
+  },
+  security: [{ bearerAuth: [] }],
+};
+
+const swaggerOptions = {
+  swaggerDefinition,
+  apis: ['./src/routes/*.js'], // JSDoc comments in route files
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// --- Static File Serving for Frontend ---
+
+// Resolve the path to the frontend build directory
+const frontendDistPath = path.resolve(__dirname, '../../dist');
+
+// Serve static files from the React app build directory
+app.use(express.static(frontendDistPath));
+
+// For any other request, serve the React app's index.html
+app.get('*', (req, res) => {
+  const indexPath = path.join(frontendDistPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({
+      error: 'Frontend build not found.',
+      message: 'Please run the frontend build process.',
+    });
+  }
+});
+
+// --- Error Handling ---
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
   res.status(404).json({
-    error: 'Endpoint not found',
-    message: `The requested endpoint ${req.originalUrl} does not exist.`,
-    availableEndpoints: [
-      '/api/chat',
-      '/api/upload',
-      '/api/training',
-      '/api/status',
-      '/health'
-    ]
+    error: 'API endpoint not found',
+    message: `The requested API endpoint ${req.originalUrl} does not exist.`,
   });
 });
 

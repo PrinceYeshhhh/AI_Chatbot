@@ -1,7 +1,7 @@
 import express from 'express';
 import { vectorService } from '../services/vectorService.js';
 import { cacheService } from '../services/cacheService.js';
-import { logger } from '../utils/logger.js';
+import { logger, wrapAsync } from '../utils/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 // GET /api/status - Get overall system status
-router.get('/', async (req, res) => {
+router.get('/', wrapAsync(async (req, res) => {
   try {
     const status = {
       timestamp: new Date().toISOString(),
@@ -77,7 +77,7 @@ router.get('/', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
-});
+}));
 
 // GET /api/status/health - Simple health check
 router.get('/health', (req, res) => {
@@ -124,7 +124,7 @@ router.get('/config', (req, res) => {
 });
 
 // GET /api/status/logs - Get recent logs (development only)
-router.get('/logs', async (req, res) => {
+router.get('/logs', wrapAsync(async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({
       error: 'Logs not available in production'
@@ -159,6 +159,6 @@ router.get('/logs', async (req, res) => {
       message: error.message
     });
   }
-});
+}));
 
 export default router;

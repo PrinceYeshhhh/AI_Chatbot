@@ -113,6 +113,15 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Supabase user profiles table (linked to auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT,
+    mobile TEXT,
+    username TEXT UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now())
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);

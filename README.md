@@ -340,6 +340,39 @@ cp .env.example .env.production
 docker-compose -f docker-compose.yml up -d
 ```
 
+## 🧑‍💻 Developer Onboarding & Environment Setup
+
+### 1. Clone the Repository
+```bash
+# Clone the repo
+git clone <your-repo-url>
+cd advanced-ai-chatbot
+```
+
+### 2. Environment Variables
+- Copy the example environment files:
+  ```bash
+  cp .env.example .env
+  cp server/.env.example server/.env
+  ```
+- Edit `server/.env` and set your OpenAI API key and any other required values.
+- **See `server/.env.example` for a full list of required and optional variables, with comments explaining each one.**
+
+### 3. Install Dependencies
+```bash
+npm install
+npm run install:backend
+```
+
+### 4. Start Development
+```bash
+npm run dev
+```
+
+### 5. Troubleshooting
+- If you see errors about missing environment variables, check your `.env` and `server/.env` files.
+- For more details, see the comments in `server/.env.example`.
+
 ## ❓ FAQ
 
 **Q: What file formats are supported?**
@@ -384,3 +417,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 🐛 **Report issues** on GitHub  
 💬 **Join discussions** in our community  
 📧 **Contact us** for enterprise support
+
+## ⚠️ TODOs & Further Review
+- [ ] Review all documentation after major changes (API, onboarding, deployment, etc.)
+- [ ] Ensure all new features and improvements are reflected in this README and in backend docs.
+- [ ] Add/expand OpenAPI/Swagger docs as needed.
+- [ ] Mark any ambiguous or in-progress features for further review.

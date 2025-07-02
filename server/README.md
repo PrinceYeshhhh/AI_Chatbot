@@ -339,3 +339,20 @@ tail -f logs/combined.log | grep DEBUG
 ## 📄 License
 
 MIT License - see LICENSE file for details.
+
+## 🧪 Backend Endpoint Testing
+
+- All backend endpoints should have automated tests (e.g., using supertest or similar).
+- **TODO:** Add or update tests for the following endpoints:
+  - [ ] /api/chat (chat.js)
+  - [ ] /api/upload (upload.js)
+  - [ ] /api/status (status.js)
+  - [ ] /api/training (training.js)
+- Ensure tests cover success, error, and edge cases for each endpoint.
+- See `server/src/routes/` for endpoint implementations.
+
+## ⚠️ TODOs & Further Review
+- [ ] Review all API endpoints for up-to-date documentation (see /api/chat, /api/upload, /api/status, /api/training).
+- [ ] Ensure all new features (rate limiting, input validation, OpenAI usage logging, etc.) are reflected in docs.
+- [ ] Add/expand OpenAPI/Swagger docs as needed.
+- [ ] Review and update this README after major changes.

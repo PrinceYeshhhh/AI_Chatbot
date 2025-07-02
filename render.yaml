@@ -1,0 +1,62 @@
+services:
+  - type: web
+    name: ai-chatbot-frontend
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    buildFilter:
+      paths:
+        - Dockerfile
+        - package.json
+        - package-lock.json
+        - src/**
+        - public/**
+        - vite.config.ts
+        - nginx.conf
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_API_URL
+        value: https://ai-chatbot-backend.onrender.com
+      # Supabase config for frontend
+      - key: VITE_SUPABASE_URL
+        value: "<your-supabase-url>" # TODO: Fill with your Supabase project URL
+      - key: VITE_SUPABASE_ANON_KEY
+        value: "<your-supabase-anon-key>" # TODO: Fill with your Supabase anon key
+      # Add other frontend env vars as needed
+
+  - type: web
+    name: ai-chatbot-backend
+    env: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    buildFilter:
+      paths:
+        - server/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-3.5-turbo
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-ada-002
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        value: https://ai-chatbot-frontend.onrender.com
+      # Supabase config for backend
+      - key: SUPABASE_URL
+        value: "<your-supabase-url>" # TODO: Fill with your Supabase project URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: "<your-supabase-service-role-key>" # TODO: Fill with your Supabase service role key
+      # Add other backend env vars as needed
+
+  - type: redis
+    name: ai-chatbot-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # Allow all services in this Render blueprint to connect

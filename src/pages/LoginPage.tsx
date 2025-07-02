@@ -1,19 +1,30 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { supabase } from '../services/supabaseClient';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!email.trim() || !password.trim()) return;
     setLoading(true);
-    await new Promise(res => setTimeout(res, 1000));
+    // Supabase sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
     setLoading(false);
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
     navigate('/chat');
   };
 
@@ -29,6 +40,7 @@ const LoginPage: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Login to Imperial AI</h2>
         <p className="text-gray-600 text-center mb-6">Sign in to your account</p>
         <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
             <input

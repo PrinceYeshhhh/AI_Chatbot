@@ -1,262 +1,199 @@
 import express from 'express';
-import { ChatOpenAI } from '@langchain/openai';
-import { OpenAIEmbeddings } from '@langchain/openai';
-import { PromptTemplate } from '@langchain/core/prompts';
-import { RunnableSequence } from '@langchain/core/runnables';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { vectorService } from '../services/vectorService.js';
-import { logger } from '../utils/logger.js';
+import { OpenAI } from 'openai';
+import { logger, wrapAsync } from '../utils/logger.js';
 import { validateChatRequest } from '../middleware/validation.js';
-import { cacheService } from '../services/cacheService.js';
+import rateLimit from 'express-rate-limit';
+import slowDown from 'express-slow-down';
 
 const router = express.Router();
 
-// Initialize OpenAI services
-const llm = new ChatOpenAI({
-  openAIApiKey: process.env.OPENAI_API_KEY,
-  modelName: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-  temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
-  maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 1000,
-  streaming: true,
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-const embeddings = new OpenAIEmbeddings({
-  openAIApiKey: process.env.OPENAI_API_KEY,
-  modelName: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002',
+// In-memory log for conversations
+const conversationLog = [];
+
+// Per-IP rate limiter for chat endpoint
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 requests per minute per IP
+  message: { error: 'Too many chat requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// Chat prompt template
-const chatPromptTemplate = PromptTemplate.fromTemplate(`
-You are an advanced AI assistant with access to uploaded documents and training data. 
-Use the provided context to answer questions accurately and helpfully.
+// Throttle repeated requests
+const chatSpeedLimiter = slowDown({
+  windowMs: 60 * 1000, // 1 minute
+  delayAfter: 10, // allow 10 requests at full speed, then...
+  delayMs: 500, // ...add 500ms per request above 10
+});
 
-Context from uploaded documents:
-{context}
+// Load prompt template from env or use default
+const PROMPT_TEMPLATE = process.env.PROMPT_TEMPLATE || 'You are a helpful assistant. Answer concisely and clearly.';
 
-Conversation history:
-{history}
+/**
+ * @openapi
+ * /chat:
+ *   post:
+ *     summary: Send a chat message and receive a streamed AI response
+ *     tags:
+ *       - Chat
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: The user's message
+ *               history:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     role:
+ *                       type: string
+ *                       enum: [user, assistant]
+ *                     content:
+ *                       type: string
+ *             required:
+ *               - message
+ *     responses:
+ *       200:
+ *         description: Streamed AI response (SSE)
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 content:
+ *                   type: string
+ *                 done:
+ *                   type: boolean
+ *       400:
+ *         description: Invalid request data
+ *       429:
+ *         description: Too many requests (rate limited)
+ *       500:
+ *         description: Internal server error
+ *     security:
+ *       - bearerAuth: []
+ *
+ * /chat/history:
+ *   get:
+ *     summary: Get conversation history (in-memory, for demo)
+ *     tags:
+ *       - Chat
+ *     responses:
+ *       200:
+ *         description: Conversation history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   user:
+ *                     type: string
+ *                   bot:
+ *                     type: string
+ *                   timestamp:
+ *                     type: string
+ *                     format: date-time
+ *     security:
+ *       - bearerAuth: []
+ */
+/**
+ * POST /api/chat
+ * Handles chat messages, streams responses from OpenAI.
+ */
+router.post('/', chatLimiter, chatSpeedLimiter, validateChatRequest, wrapAsync(async (req, res) => {
+  const { message, history = [] } = req.body;
+  const userMessage = { role: 'user', content: message };
 
-Current question: {question}
+  // Prepend prompt template as system message
+  const systemPrompt = { role: 'system', content: PROMPT_TEMPLATE };
+  const messages = [systemPrompt, ...history, userMessage];
 
-Instructions:
-- Answer based on the provided context when relevant
-- If the context doesn't contain relevant information, use your general knowledge
-- Be conversational and helpful
-- Cite specific information from the context when applicable
-- If you're unsure about something, say so
+  let retryCount = 0;
+  const maxRetries = 2;
+  let usageLogged = false;
 
-Answer:
-`);
-
-// POST /api/chat - Main chat endpoint
-router.post('/', validateChatRequest, async (req, res) => {
-  try {
-    const { message, conversationHistory = [], useContext = true } = req.body;
-    
-    logger.info(`Chat request received: ${message.substring(0, 100)}...`);
-
-    // Check cache first
-    const cacheKey = `chat:${message}:${JSON.stringify(conversationHistory)}`;
-    const cachedResponse = cacheService.get(cacheKey);
-    
-    if (cachedResponse) {
-      logger.info('Returning cached response');
-      return res.json({
-        response: cachedResponse,
-        cached: true,
-        timestamp: new Date().toISOString()
+  async function callOpenAI() {
+    try {
+      // Request a streaming completion from the OpenAI API
+      const stream = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        messages: messages,
+        stream: true, // Enable streaming
       });
-    }
 
-    // Set up SSE headers for streaming
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control'
-    });
+      // Set headers for Server-Sent Events (SSE)
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders(); // Flush the headers to establish the connection
 
-    let context = '';
-    let retrievedDocs = [];
-
-    // Retrieve relevant context from vector store if enabled
-    if (useContext) {
-      try {
-        const similarityThreshold = parseFloat(process.env.VECTOR_SIMILARITY_THRESHOLD) || 0.7;
-        const maxResults = parseInt(process.env.MAX_RETRIEVAL_RESULTS) || 5;
-        
-        retrievedDocs = await vectorService.similaritySearch(message, maxResults);
-        
-        if (retrievedDocs.length > 0) {
-          context = retrievedDocs
-            .filter(doc => doc.score >= similarityThreshold)
-            .map(doc => `Document: ${doc.metadata.filename || 'Unknown'}\nContent: ${doc.content}`)
-            .join('\n\n');
-          
-          logger.info(`Retrieved ${retrievedDocs.length} relevant documents`);
+      let fullResponse = '';
+      let totalTokens = 0;
+      // Process the stream from OpenAI
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullResponse += content;
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
-      } catch (error) {
-        logger.warn('Error retrieving context from vector store:', error.message);
-        // Continue without context
+        // Track token usage if available
+        if (chunk.usage && chunk.usage.total_tokens) {
+          totalTokens = chunk.usage.total_tokens;
+        }
       }
-    }
 
-    // Format conversation history
-    const history = conversationHistory
-      .slice(-10) // Keep last 10 messages for context
-      .map(msg => `${msg.sender}: ${msg.content}`)
-      .join('\n');
-
-    // Create the chain
-    const chain = RunnableSequence.from([
-      chatPromptTemplate,
-      llm,
-      new StringOutputParser(),
-    ]);
-
-    // Stream the response
-    let fullResponse = '';
-    const stream = await chain.stream({
-      context: context || 'No specific context available.',
-      history: history || 'No previous conversation.',
-      question: message,
-    });
-
-    // Send initial metadata
-    res.write(`data: ${JSON.stringify({
-      type: 'metadata',
-      retrievedDocs: retrievedDocs.length,
-      hasContext: context.length > 0,
-      timestamp: new Date().toISOString()
-    })}\n\n`);
-
-    // Stream response chunks
-    for await (const chunk of stream) {
-      fullResponse += chunk;
-      res.write(`data: ${JSON.stringify({
-        type: 'chunk',
-        content: chunk
-      })}\n\n`);
-    }
-
-    // Send completion signal
-    res.write(`data: ${JSON.stringify({
-      type: 'complete',
-      fullResponse,
-      metadata: {
-        retrievedDocs: retrievedDocs.length,
-        hasContext: context.length > 0,
-        responseLength: fullResponse.length
+      // Log usage/cost if available
+      if (!usageLogged) {
+        logger.info(`OpenAI usage: ${totalTokens} tokens for this request.`);
+        usageLogged = true;
       }
-    })}\n\n`);
 
-    res.write('data: [DONE]\n\n');
-    res.end();
+      logger.info(`Full AI response: "${fullResponse}"`);
+      conversationLog.push({ user: message, bot: fullResponse, timestamp: new Date() });
 
-    // Cache the response
-    if (fullResponse.length > 0) {
-      cacheService.set(cacheKey, fullResponse);
-    }
-
-    logger.info(`Chat response completed. Length: ${fullResponse.length} characters`);
-
-  } catch (error) {
-    logger.error('Error in chat endpoint:', error);
-    
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Internal server error',
-        message: 'Failed to process chat request',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    } else {
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        error: 'Failed to complete response'
-      })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
-    }
-  }
-});
-
-// POST /api/chat/simple - Non-streaming chat endpoint
-router.post('/simple', validateChatRequest, async (req, res) => {
-  try {
-    const { message, conversationHistory = [], useContext = true } = req.body;
-    
-    logger.info(`Simple chat request: ${message.substring(0, 100)}...`);
-
-    let context = '';
-    
-    if (useContext) {
-      try {
-        const retrievedDocs = await vectorService.similaritySearch(message, 3);
-        if (retrievedDocs.length > 0) {
-          context = retrievedDocs
-            .map(doc => doc.content)
-            .join('\n\n');
-        }
-      } catch (error) {
-        logger.warn('Error retrieving context:', error.message);
+    } catch (error) {
+      // Handle OpenAI rate limit errors with fallback/queue
+      if (error.status === 429 && retryCount < maxRetries) {
+        retryCount++;
+        logger.warn('OpenAI rate limit hit, retrying after delay...');
+        await new Promise(r => setTimeout(r, 1000 * retryCount));
+        return callOpenAI();
+      }
+      logger.error('Error in chat endpoint:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to get response from AI' });
+      } else {
+        res.end();
       }
     }
-
-    const history = conversationHistory
-      .slice(-5)
-      .map(msg => `${msg.sender}: ${msg.content}`)
-      .join('\n');
-
-    const prompt = await chatPromptTemplate.format({
-      context: context || 'No specific context available.',
-      history: history || 'No previous conversation.',
-      question: message,
-    });
-
-    const response = await llm.invoke(prompt);
-    
-    res.json({
-      response: response.content,
-      metadata: {
-        hasContext: context.length > 0,
-        timestamp: new Date().toISOString()
-      }
-    });
-
-  } catch (error) {
-    logger.error('Error in simple chat endpoint:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to process chat request'
-    });
   }
-});
 
-// GET /api/chat/context/:query - Get relevant context for a query
-router.get('/context/:query', async (req, res) => {
-  try {
-    const { query } = req.params;
-    const limit = parseInt(req.query.limit) || 5;
-    
-    const results = await vectorService.similaritySearch(query, limit);
-    
-    res.json({
-      query,
-      results: results.map(doc => ({
-        content: doc.content.substring(0, 500) + '...',
-        score: doc.score,
-        metadata: doc.metadata
-      })),
-      count: results.length
-    });
+  // Log the user's message
+  logger.info(`Received message from user: "${message}"`);
+  await callOpenAI();
+}));
 
-  } catch (error) {
-    logger.error('Error retrieving context:', error);
-    res.status(500).json({
-      error: 'Failed to retrieve context',
-      message: error.message
-    });
-  }
+/**
+ * GET /api/chat/history
+ * Returns the logged conversation history.
+ */
+router.get('/history', (req, res) => {
+  res.status(200).json(conversationLog);
 });
 
 export default router;

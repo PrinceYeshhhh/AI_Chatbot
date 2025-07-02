@@ -10,28 +10,35 @@ import { PerformanceMonitor } from './utils/performanceMonitor';
 import { FeatureTestPanel } from './components/FeatureTestPanel';
 import { TextVisibilityTest } from './components/TextVisibilityTest';
 import IntroAnimation from './components/IntroAnimation';
+import { useAuth } from './hooks/useAuth';
 
 function App() {
+  const { user, loading, signOut } = useAuth();
+
+  return (
+    <ErrorBoundary
+      onError={(_error, _errorInfo) => {
+        // Handle error silently or log to external service
+        console.log('An error occurred in the application');
+      }}
+    >
+      <div className="app-container" role="application" aria-label="AI Chatbot Application">
+        <AppContent />
+      </div>
+    </ErrorBoundary>
+  );
+}
+
+// Separate component for the main app content that uses router hooks
+function AppContent() {
   const [showIntro, setShowIntro] = React.useState(true);
+  const location = useLocation();
+  const { announce } = useLiveRegion('polite');
 
   // Handle intro completion
   const handleIntroComplete = () => {
     setShowIntro(false);
   };
-
-  // Show intro animation on first load
-  if (showIntro) {
-    return <IntroAnimation onComplete={handleIntroComplete} />;
-  }
-
-  // Only use router hooks after intro is complete
-  return <AppContent />;
-}
-
-// Separate component for the main app content that uses router hooks
-function AppContent() {
-  const location = useLocation();
-  const { announce } = useLiveRegion('polite');
 
   // Set up keyboard navigation for the entire app
   useKeyboardNavigation({
@@ -89,71 +96,69 @@ function AppContent() {
     };
   }, [location.pathname, announce]);
 
+  // Show intro animation on first load
+  if (showIntro) {
+    return <IntroAnimation onComplete={handleIntroComplete} />;
+  }
+
   return (
-    <ErrorBoundary
-      onError={(_error, _errorInfo) => {
-        // Handle error silently or log to external service
-        console.log('An error occurred in the application');
-      }}
-    >
-      <div className="app-container" role="application" aria-label="AI Chatbot Application">
-        {/* Skip link for accessibility */}
-        <a 
-          href="#main-content" 
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-blue-600 text-white px-4 py-2 rounded z-50"
-        >
-          Skip to main content
-        </a>
+    <>
+      {/* Skip link for accessibility */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-blue-600 text-white px-4 py-2 rounded z-50"
+      >
+        Skip to main content
+      </a>
 
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route 
-              path="/login" 
-              element={
-                <MLErrorBoundary>
-                  <LoginPage />
-                </MLErrorBoundary>
-              } 
-            />
-            <Route 
-              path="/register" 
-              element={
-                <MLErrorBoundary>
-                  <RegisterPage />
-                </MLErrorBoundary>
-              } 
-            />
-            <Route 
-              path="/chat" 
-              element={
-                <MLErrorBoundary>
-                  <ChatPage />
-                </MLErrorBoundary>
-              } 
-            />
-            <Route path="/test" element={<FeatureTestPanel />} />
-            <Route path="/text-visibility-test" element={<TextVisibilityTest />} />
-            <Route path="/" element={<Navigate to="/chat" replace />} />
-          </Routes>
-        </AnimatePresence>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route 
+            path="/login" 
+            element={
+              <MLErrorBoundary>
+                <LoginPage />
+              </MLErrorBoundary>
+            } 
+          />
+          <Route 
+            path="/register" 
+            element={
+              <MLErrorBoundary>
+                <RegisterPage />
+              </MLErrorBoundary>
+            } 
+          />
+          <Route 
+            path="/chat" 
+            element={
+              <MLErrorBoundary>
+                <ChatPage />
+              </MLErrorBoundary>
+            } 
+          />
+          <Route path="/test" element={<FeatureTestPanel />} />
+          <Route path="/text-visibility-test" element={<TextVisibilityTest />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+        </Routes>
+      </AnimatePresence>
 
-        {/* Live region for announcements */}
-        <div 
-          id="aria-live-region"
-          aria-live="polite" 
-          aria-atomic="true"
-          className="sr-only"
-        />
+      {/* Live region for announcements */}
+      <div 
+        id="aria-live-region"
+        aria-live="polite" 
+        aria-atomic="true"
+        className="sr-only"
+      />
 
-        {/* Performance monitoring panel (development only) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity">
-            <div className="font-semibold mb-2">Performance</div>
-            <PerformancePanel />
-          </div>
-        )}
-      </div>
-    </ErrorBoundary>
+      {/* Performance monitoring panel (development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity">
+          <div className="font-semibold mb-2">Performance</div>
+          <PerformancePanel />
+        </div>
+      )}
+    </>
   );
 }
 

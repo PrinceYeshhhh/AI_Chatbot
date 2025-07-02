@@ -8,6 +8,22 @@ const __dirname = path.dirname(__filename);
 // Create logs directory if it doesn't exist
 const logDir = path.join(__dirname, '../../logs');
 
+// Sensitive fields to redact from logs
+const SENSITIVE_KEYS = ['OPENAI_API_KEY', 'DATABASE_URL', 'password', 'token', 'apiKey', 'fileContent', 'content'];
+
+function redactSensitive(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const clone = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const key in clone) {
+    if (SENSITIVE_KEYS.includes(key)) {
+      clone[key] = '[REDACTED]';
+    } else if (typeof clone[key] === 'object') {
+      clone[key] = redactSensitive(clone[key]);
+    }
+  }
+  return clone;
+}
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -46,6 +62,34 @@ if (process.env.NODE_ENV !== 'production') {
       })
     )
   }));
+}
+
+// Patch logger to redact sensitive info
+const origError = logger.error.bind(logger);
+logger.error = (...args) => {
+  const redactedArgs = args.map(arg => typeof arg === 'object' ? redactSensitive(arg) : arg);
+  origError(...redactedArgs);
+};
+
+const origWarn = logger.warn.bind(logger);
+logger.warn = (...args) => {
+  const redactedArgs = args.map(arg => typeof arg === 'object' ? redactSensitive(arg) : arg);
+  origWarn(...redactedArgs);
+};
+
+const origInfo = logger.info.bind(logger);
+logger.info = (...args) => {
+  const redactedArgs = args.map(arg => typeof arg === 'object' ? redactSensitive(arg) : arg);
+  origInfo(...redactedArgs);
+};
+
+/**
+ * Utility to wrap async route handlers and forward errors to next()
+ */
+export function wrapAsync(fn) {
+  return function (req, res, next) {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
 }
 
 export { logger };

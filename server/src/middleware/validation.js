@@ -1,17 +1,20 @@
 import Joi from 'joi';
 import { logger } from '../utils/logger.js';
+import xss from 'xss';
+
+const sanitize = (str) => xss(str, { whiteList: {}, stripIgnoreTag: true, stripIgnoreTagBody: ['script'] });
 
 // Chat request validation schema
 const chatRequestSchema = Joi.object({
-  message: Joi.string().required().min(1).max(4000).trim(),
+  message: Joi.string().required().min(1).max(4000).trim().custom((v) => sanitize(v)),
   conversationHistory: Joi.array().items(
     Joi.object({
       id: Joi.string().required(),
-      content: Joi.string().required(),
+      content: Joi.string().required().custom((v) => sanitize(v)),
       sender: Joi.string().valid('user', 'bot').required(),
       timestamp: Joi.date().required(),
       status: Joi.string().valid('sending', 'sent', 'failed').optional(),
-      intent: Joi.string().optional()
+      intent: Joi.string().optional().custom((v) => sanitize(v))
     })
   ).optional().default([]),
   useContext: Joi.boolean().optional().default(true)
@@ -19,9 +22,9 @@ const chatRequestSchema = Joi.object({
 
 // Training data validation schema
 const trainingDataSchema = Joi.object({
-  input: Joi.string().required().min(1).max(1000).trim(),
-  expectedOutput: Joi.string().required().min(1).max(4000).trim(),
-  intent: Joi.string().required().min(1).max(100).trim(),
+  input: Joi.string().required().min(1).max(1000).trim().custom((v) => sanitize(v)),
+  expectedOutput: Joi.string().required().min(1).max(4000).trim().custom((v) => sanitize(v)),
+  intent: Joi.string().required().min(1).max(100).trim().custom((v) => sanitize(v)),
   confidence: Joi.number().min(0).max(1).optional().default(0.98)
 });
 

@@ -1,11 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import pdfParse from 'pdf-parse';
+import PDFParser from 'pdf2json';
 import csv from 'csv-parser';
 import { marked } from 'marked';
 import mammoth from 'mammoth';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { logger } from '../utils/logger.js';
+import xss from 'xss';
 
 class DocumentProcessor {
   constructor() {
@@ -46,17 +47,18 @@ class DocumentProcessor {
       }
 
       // Split content into chunks
-      const chunks = await this.splitIntoChunks(content, metadata);
+      const sanitizedContent = sanitize(content);
+      const chunks = await this.splitIntoChunks(sanitizedContent, metadata);
 
-      logger.info(`Processed ${metadata.filename}: ${content.length} characters, ${chunks.length} chunks`);
+      logger.info(`Processed ${metadata.filename}: ${sanitizedContent.length} characters, ${chunks.length} chunks`);
 
       return {
-        content,
+        content: sanitizedContent,
         chunks,
         metadata: {
           ...metadata,
           processedAt: new Date().toISOString(),
-          contentLength: content.length,
+          contentLength: sanitizedContent.length,
           chunkCount: chunks.length
         }
       };
@@ -69,15 +71,16 @@ class DocumentProcessor {
 
   async processText(content, metadata = {}) {
     try {
-      const chunks = await this.splitIntoChunks(content, metadata);
+      const sanitizedContent = sanitize(content);
+      const chunks = await this.splitIntoChunks(sanitizedContent, metadata);
 
       return {
-        content,
+        content: sanitizedContent,
         chunks,
         metadata: {
           ...metadata,
           processedAt: new Date().toISOString(),
-          contentLength: content.length,
+          contentLength: sanitizedContent.length,
           chunkCount: chunks.length
         }
       };
@@ -133,9 +136,21 @@ class DocumentProcessor {
   }
 
   async processPdfFile(filePath) {
-    const dataBuffer = await fs.readFile(filePath);
-    const pdfData = await pdfParse(dataBuffer);
-    return pdfData.text;
+    return new Promise((resolve, reject) => {
+      const pdfParser = new PDFParser(this, 1);
+
+      pdfParser.on('pdfParser_dataError', errData => {
+        logger.error('Error parsing PDF:', errData.parserError);
+        reject(errData.parserError);
+      });
+
+      pdfParser.on('pdfParser_dataReady', () => {
+        const textContent = pdfParser.getRawTextContent();
+        resolve(textContent);
+      });
+
+      pdfParser.loadPDF(filePath);
+    });
   }
 
   async processJsonFile(filePath) {
@@ -242,5 +257,7 @@ class DocumentProcessor {
     return summary.length > maxLength ? summary.substring(0, maxLength) + '...' : summary;
   }
 }
+
+const sanitize = (str) => xss(str, { whiteList: {}, stripIgnoreTag: true, stripIgnoreTagBody: ['script'] });
 
 export const documentProcessor = new DocumentProcessor();

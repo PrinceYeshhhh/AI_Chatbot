@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { supabase, insertProfile } from '../services/supabaseClient';
 
 const RegisterPage: React.FC = () => {
   const [form, setForm] = useState({
@@ -13,6 +14,7 @@ const RegisterPage: React.FC = () => {
     terms: false
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,9 +24,40 @@ const RegisterPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!form.name || !form.email || !form.mobile || !form.username || !form.password || !form.confirm || !form.terms) return;
+    if (form.password !== form.confirm) {
+      setError('Passwords do not match');
+      return;
+    }
     setLoading(true);
-    await new Promise(res => setTimeout(res, 1000));
+    // Supabase sign up
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        data: {
+          name: form.name,
+          mobile: form.mobile,
+          username: form.username
+        }
+      }
+    });
+    if (signUpError) {
+      setLoading(false);
+      setError(signUpError.message);
+      return;
+    }
+    // Insert profile data
+    const userId = data?.user?.id;
+    if (userId) {
+      const { error: profileError } = await insertProfile(userId, form.name, form.mobile, form.username);
+      if (profileError) {
+        setLoading(false);
+        setError('Sign up succeeded, but failed to save profile: ' + profileError.message);
+        return;
+      }
+    }
     setLoading(false);
     navigate('/login');
   };
@@ -41,6 +74,7 @@ const RegisterPage: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Create Your Account</h2>
         <p className="text-gray-600 text-center mb-6">Sign up for Imperial AI</p>
         <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
             <input

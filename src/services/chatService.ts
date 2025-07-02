@@ -496,6 +496,49 @@ class ChatService {
   maskApiKey(key: string): string {
     return SecurityUtils.maskApiKey(key);
   }
+
+  /**
+   * Upload one or more files to the backend and handle errors uniformly, with progress and 207 support
+   */
+  async uploadFiles(files: File[], onProgress?: (percent: number) => void): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`;
+      xhr.open('POST', url);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+
+      xhr.onload = () => {
+        try {
+          const result = JSON.parse(xhr.responseText);
+          if (xhr.status === 207) {
+            resolve(result);
+          } else if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(result);
+          } else {
+            reject(new Error(result.error || `Upload failed: ${xhr.status}`));
+          }
+        } catch (e) {
+          reject(new Error('Failed to parse upload response.'));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error: Unable to reach the server. Please check your connection.'));
+      };
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file);
+      }
+      xhr.send(formData);
+    });
+  }
 }
 
 // Export singleton instance with lazy initialization

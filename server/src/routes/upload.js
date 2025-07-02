@@ -6,7 +6,9 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { documentProcessor } from '../services/documentProcessor.js';
 import { vectorService } from '../services/vectorService.js';
-import { logger } from '../utils/logger.js';
+import { logger, wrapAsync } from '../utils/logger.js';
+import rateLimit from 'express-rate-limit';
+import slowDown from 'express-slow-down';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,8 +58,59 @@ const upload = multer({
   }
 });
 
+// Per-IP rate limiter for upload endpoint
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute per IP
+  message: { error: 'Too many upload requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Throttle repeated requests
+const uploadSpeedLimiter = slowDown({
+  windowMs: 60 * 1000, // 1 minute
+  delayAfter: 5, // allow 5 requests at full speed, then...
+  delayMs: 1000, // ...add 1s per request above 5
+});
+
+/**
+ * @openapi
+ * /upload:
+ *   post:
+ *     summary: Upload and process files
+ *     tags:
+ *       - Upload
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Files processed successfully
+ *       207:
+ *         description: Some files failed to process
+ *       400:
+ *         description: No files uploaded or invalid file type
+ *       413:
+ *         description: File too large or too many files
+ *       429:
+ *         description: Too many requests (rate limited)
+ *       500:
+ *         description: Upload processing failed
+ *     security:
+ *       - bearerAuth: []
+ */
 // POST /api/upload - Upload and process files
-router.post('/', upload.array('files', 10), async (req, res) => {
+router.post('/', uploadLimiter, uploadSpeedLimiter, upload.array('files', 10), wrapAsync(async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -109,6 +162,12 @@ router.post('/', upload.array('files', 10), async (req, res) => {
         } catch (unlinkError) {
           logger.warn(`Failed to clean up file ${file.path}:`, unlinkError);
         }
+        // Also remove any vector store entries for this file
+        try {
+          await vectorService.deleteDocument(file.originalname);
+        } catch (vectorError) {
+          logger.warn(`Failed to clean up vector store for ${file.originalname}:`, vectorError);
+        }
       }
     }
 
@@ -137,12 +196,55 @@ router.post('/', upload.array('files', 10), async (req, res) => {
       message: error.message
     });
   }
-});
+}));
 
+/**
+ * @openapi
+ * /upload/text:
+ *   post:
+ *     summary: Upload raw text content
+ *     tags:
+ *       - Upload
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *               filename:
+ *                 type: string
+ *               metadata:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Text processed successfully
+ *       400:
+ *         description: Invalid content
+ *       413:
+ *         description: Content too large
+ *       429:
+ *         description: Too many requests (rate limited)
+ *       500:
+ *         description: Text processing failed
+ *     security:
+ *       - bearerAuth: []
+ */
 // POST /api/upload/text - Upload raw text content
-router.post('/text', async (req, res) => {
+router.post('/text', wrapAsync(async (req, res) => {
   try {
     const { content, filename = 'text-input.txt', metadata = {} } = req.body;
+
+    // Enforce a maximum size for text uploads (e.g., 256KB)
+    if (typeof content === 'string' && Buffer.byteLength(content, 'utf-8') > 256 * 1024) {
+      return res.status(413).json({
+        error: 'Content too large',
+        message: 'Text uploads must be less than 256KB. Please use the file upload endpoint for larger files.'
+      });
+    }
+    // TODO: Consider supporting streaming or chunked uploads for very large text data
 
     if (!content || typeof content !== 'string') {
       return res.status(400).json({
@@ -179,10 +281,23 @@ router.post('/text', async (req, res) => {
       message: error.message
     });
   }
-});
+}));
 
+/**
+ * @openapi
+ * /upload/status:
+ *   get:
+ *     summary: Get upload and processing status
+ *     tags:
+ *       - Upload
+ *     responses:
+ *       200:
+ *         description: Upload and vector store status
+ *     security:
+ *       - bearerAuth: []
+ */
 // GET /api/upload/status - Get upload and processing status
-router.get('/status', async (req, res) => {
+router.get('/status', wrapAsync(async (req, res) => {
   try {
     const vectorStats = await vectorService.getStats();
     
@@ -218,10 +333,10 @@ router.get('/status', async (req, res) => {
       message: error.message
     });
   }
-});
+}));
 
 // DELETE /api/upload/clear - Clear all uploaded files and vectors
-router.delete('/clear', async (req, res) => {
+router.delete('/clear', wrapAsync(async (req, res) => {
   try {
     logger.info('Clearing all uploaded files and vectors');
 
@@ -249,6 +364,6 @@ router.delete('/clear', async (req, res) => {
       message: error.message
     });
   }
-});
+}));
 
 export default router;

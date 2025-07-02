@@ -21,11 +21,34 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
+  // Skip API calls and external requests
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes('localhost:3001') ||
+      event.request.url.includes('localhost:5173/chat') ||
+      event.request.url.includes('localhost:5173/api')) {
+    // For API calls, just fetch from network, don't cache
+    event.respondWith(fetch(event.request).catch(() => {
+      // If network fails, return a simple error response
+      return new Response(JSON.stringify({ error: 'Network error' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // Return cached version or fetch from network
         return response || fetch(event.request);
+      })
+      .catch(() => {
+        // If both cache and network fail, return a fallback
+        if (event.request.destination === 'document') {
+          return caches.match('/index.html');
+        }
+        return new Response('Offline content not available', { status: 503 });
       })
   );
 });

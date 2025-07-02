@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Mic, Paperclip, X } from 'lucide-react';
+import { chatService } from '../services/chatService';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -22,6 +23,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [showAttachments, setShowAttachments] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const ALLOWED_FILE_TYPES = ['.pdf', '.doc', '.docx', '.txt', '.jpg', '.png'];
 
   // Auto-resize textarea
   useEffect(() => {
@@ -31,30 +37,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [message]);
 
+  const validateMessage = (msg: string): string | null => {
+    if (!msg.trim()) return 'Message cannot be empty or whitespace.';
+    if (msg.length > maxLength) return `Message is too long. Maximum ${maxLength} characters allowed.`;
+    if (/\b(script|<script|<\/script)\b/i.test(msg)) return 'Message contains potentially malicious content.';
+    if (msg.split(/\s+/).some(word => word.length > 100)) return 'Message contains an unusually long word.';
+    if (new Blob([msg]).size > 16 * 1024) return 'Message is too large. Please shorten your input.';
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || disabled || isProcessing) return;
-    
     setIsProcessing(true);
-
     try {
       const trimmedMessage = message.trim();
-      
-      // Basic validation
-      if (trimmedMessage.length === 0) {
-        onError?.('Message cannot be empty');
+      // Stricter validation
+      const validationError = validateMessage(trimmedMessage);
+      if (validationError) {
+        onError?.(validationError);
         return;
       }
-
-      if (trimmedMessage.length > maxLength) {
-        onError?.(`Message is too long. Maximum ${maxLength} characters allowed.`);
-        return;
-      }
-
       await onSendMessage(trimmedMessage);
       setMessage('');
-      
-      // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -103,39 +108,43 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    // Validate files before upload
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        onError?.(`File ${file.name} is too large. Maximum allowed size is 50MB.`);
+        return;
+      }
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!ALLOWED_FILE_TYPES.includes(ext)) {
+        onError?.(`File type not allowed: ${file.name}`);
+        return;
+      }
+    }
+    setUploadProgress(0);
+    setUploadStatus(null);
     try {
-      const formData = new FormData();
-      formData.append('files', file);
-
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
+      const result = await chatService.uploadFiles(files, (percent) => setUploadProgress(percent));
+      setUploadProgress(null);
+      // Handle 207 multi-status
       if (result.errors && result.errors.length > 0) {
-        throw new Error(result.errors[0].error);
+        setUploadStatus(`Some files failed: ${result.errors.map((err: any) => err.filename + ': ' + err.error).join('; ')}`);
+        onError?.(result.errors.map((err: any) => err.error).join('; '));
+      } else {
+        setUploadStatus('Upload successful!');
       }
-
-      // Add a reference to the uploaded file in the message
-      setMessage(prev => prev + ` [Uploaded: ${file.name} - ${result.summary?.totalChunks || 0} chunks processed]`);
-      
+      // Add a reference to the uploaded files in the message
+      setMessage(prev => prev + files.map(file => ` [Uploaded: ${file.name} - ${result.summary?.totalChunks || 0} chunks processed]`).join(''));
       // Clear the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-
     } catch (error) {
+      setUploadProgress(null);
+      setUploadStatus('Upload failed');
       console.error('File upload error:', error);
-      onError?.(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      onError?.(error instanceof Error ? error.message : 'Unknown error');
     }
   };
 
@@ -167,6 +176,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 className="hidden"
                 onChange={handleFileUpload}
                 accept=".pdf,.doc,.docx,.txt,.jpg,.png"
+                multiple
               />
             </label>
             <button
@@ -182,6 +192,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <span className="text-sm">{isRecording ? 'Recording...' : 'Voice'}</span>
             </button>
           </div>
+          {/* Upload Progress Indicator */}
+          {uploadProgress !== null && (
+            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-500 h-2 rounded-full transition-all duration-200"
+                style={{ width: `${uploadProgress}%` }}
+              />
+              <div className="text-xs text-gray-600 mt-1">Uploading: {uploadProgress}%</div>
+            </div>
+          )}
+          {/* Upload Status */}
+          {uploadStatus && (
+            <div className="mt-2 text-xs text-red-600" role="alert">{uploadStatus}</div>
+          )}
         </div>
       )}
 

@@ -1,55 +1,27 @@
-import { ChromaClient } from 'chromadb';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { logger } from '../utils/logger.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 class VectorService {
   constructor() {
-    this.client = null;
-    this.collection = null;
     this.embeddings = null;
+    this.documents = [];
     this.isInitialized = false;
   }
 
   async initialize() {
     try {
-      // Initialize ChromaDB client
-      this.client = new ChromaClient({
-        path: process.env.CHROMA_DB_PATH || path.join(__dirname, '../../vector_store')
-      });
-
-      // Initialize OpenAI embeddings
-      this.embeddings = new OpenAIEmbeddings({
-        openAIApiKey: process.env.OPENAI_API_KEY,
-        modelName: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002',
-      });
-
-      // Get or create collection
-      const collectionName = process.env.CHROMA_COLLECTION_NAME || 'chatbot_embeddings';
-      
-      try {
-        this.collection = await this.client.getCollection({
-          name: collectionName
+      // Initialize OpenAI embeddings only if API key is available
+      if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_api_key_here') {
+        this.embeddings = new OpenAIEmbeddings({
+          openAIApiKey: process.env.OPENAI_API_KEY,
+          modelName: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002',
         });
-        logger.info(`Connected to existing collection: ${collectionName}`);
-      } catch (error) {
-        // Collection doesn't exist, create it
-        this.collection = await this.client.createCollection({
-          name: collectionName,
-          metadata: {
-            description: 'AI Chatbot document embeddings',
-            created_at: new Date().toISOString()
-          }
-        });
-        logger.info(`Created new collection: ${collectionName}`);
+        logger.info('Vector service initialized successfully with OpenAI embeddings');
+      } else {
+        logger.warn('OpenAI API key not found. Vector service will use simple text matching.');
       }
 
       this.isInitialized = true;
-      logger.info('Vector service initialized successfully');
 
     } catch (error) {
       logger.error('Failed to initialize vector service:', error);
@@ -72,15 +44,21 @@ class VectorService {
           const chunk = chunks[i];
           const chunkId = `${metadata.filename}_chunk_${i}_${Date.now()}`;
 
-          // Generate embedding
-          const embedding = await this.embeddings.embedQuery(chunk.content);
+          // Generate embedding if available, otherwise use simple hash
+          let embedding = null;
+          if (this.embeddings) {
+            embedding = await this.embeddings.embedQuery(chunk.content);
+          } else {
+            // Simple hash-based embedding for fallback
+            embedding = this.simpleHashEmbedding(chunk.content);
+          }
 
-          // Add to ChromaDB
-          await this.collection.add({
-            ids: [chunkId],
-            embeddings: [embedding],
-            documents: [chunk.content],
-            metadatas: [{
+          // Store in memory
+          this.documents.push({
+            id: chunkId,
+            content: chunk.content,
+            embedding: embedding,
+            metadata: {
               filename: metadata.filename,
               chunkIndex: i,
               chunkSize: chunk.content.length,
@@ -88,7 +66,7 @@ class VectorService {
               mimetype: metadata.mimetype,
               uploadedAt: new Date().toISOString(),
               ...chunk.metadata
-            }]
+            }
           });
 
           results.push(chunkId);
@@ -110,32 +88,37 @@ class VectorService {
     }
 
     try {
-      // Generate query embedding
-      const queryEmbedding = await this.embeddings.embedQuery(query);
-
-      // Search in ChromaDB
-      const results = await this.collection.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: limit,
-        include: ['documents', 'metadatas', 'distances']
-      });
-
-      // Format results
-      const formattedResults = [];
-      
-      if (results.documents && results.documents[0]) {
-        for (let i = 0; i < results.documents[0].length; i++) {
-          formattedResults.push({
-            content: results.documents[0][i],
-            metadata: results.metadatas[0][i],
-            score: 1 - results.distances[0][i], // Convert distance to similarity score
-            distance: results.distances[0][i]
-          });
-        }
+      // Generate query embedding if available, otherwise use simple hash
+      let queryEmbedding = null;
+      if (this.embeddings) {
+        queryEmbedding = await this.embeddings.embedQuery(query);
+      } else {
+        queryEmbedding = this.simpleHashEmbedding(query);
       }
 
-      logger.info(`Similarity search returned ${formattedResults.length} results for query: ${query.substring(0, 50)}...`);
-      return formattedResults;
+      // Calculate similarities
+      const similarities = this.documents.map(doc => {
+        const similarity = this.cosineSimilarity(queryEmbedding, doc.embedding);
+        return {
+          ...doc,
+          score: similarity,
+          distance: 1 - similarity
+        };
+      });
+
+      // Sort by similarity and return top results
+      const results = similarities
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map(doc => ({
+          content: doc.content,
+          metadata: doc.metadata,
+          score: doc.score,
+          distance: doc.distance
+        }));
+
+      logger.info(`Similarity search returned ${results.length} results for query: ${query.substring(0, 50)}...`);
+      return results;
 
     } catch (error) {
       logger.error('Error performing similarity search:', error);
@@ -149,11 +132,9 @@ class VectorService {
     }
 
     try {
-      const count = await this.collection.count();
-      
       return {
-        totalDocuments: count,
-        collectionName: this.collection.name,
+        totalDocuments: this.documents.length,
+        collectionName: 'in-memory-embeddings',
         isInitialized: this.isInitialized,
         embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002'
       };
@@ -170,21 +151,8 @@ class VectorService {
     }
 
     try {
-      // Delete the collection
-      await this.client.deleteCollection({
-        name: this.collection.name
-      });
-
-      // Recreate the collection
-      this.collection = await this.client.createCollection({
-        name: process.env.CHROMA_COLLECTION_NAME || 'chatbot_embeddings',
-        metadata: {
-          description: 'AI Chatbot document embeddings',
-          created_at: new Date().toISOString()
-        }
-      });
-
-      logger.info('Vector store cleared and recreated');
+      this.documents = [];
+      logger.info('Vector store cleared');
 
     } catch (error) {
       logger.error('Error clearing vector store:', error);
@@ -198,27 +166,71 @@ class VectorService {
     }
 
     try {
-      // Get all documents with the specified filename
-      const results = await this.collection.get({
-        where: { filename: filename }
-      });
+      const initialCount = this.documents.length;
+      this.documents = this.documents.filter(doc => doc.metadata.filename !== filename);
+      const deletedCount = initialCount - this.documents.length;
 
-      if (results.ids && results.ids.length > 0) {
-        // Delete all chunks for this document
-        await this.collection.delete({
-          ids: results.ids
-        });
-
-        logger.info(`Deleted ${results.ids.length} chunks for document: ${filename}`);
-        return results.ids.length;
-      }
-
-      return 0;
+      logger.info(`Deleted ${deletedCount} chunks for document: ${filename}`);
+      return deletedCount;
 
     } catch (error) {
       logger.error(`Error deleting document ${filename}:`, error);
       throw error;
     }
+  }
+
+  async getAllDocuments() {
+    if (!this.isInitialized) {
+      throw new Error('Vector service not initialized');
+    }
+
+    try {
+      const formattedResults = this.documents.map(doc => ({
+        id: doc.id,
+        content: doc.content,
+        metadata: doc.metadata
+      }));
+
+      logger.info(`Retrieved ${formattedResults.length} documents from vector store`);
+      return formattedResults;
+
+    } catch (error) {
+      logger.error('Error getting all documents:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to calculate cosine similarity
+  cosineSimilarity(vecA, vecB) {
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+
+  // Helper method to create simple hash-based embeddings when OpenAI is not available
+  simpleHashEmbedding(text) {
+    const words = text.toLowerCase().split(/\s+/);
+    const embedding = new Array(1536).fill(0); // Same size as OpenAI embeddings
+    
+    words.forEach((word, index) => {
+      const hash = this.simpleHash(word);
+      const position = hash % embedding.length;
+      embedding[position] = (embedding[position] + 1) / (index + 1);
+    });
+    
+    return embedding;
+  }
+
+  // Simple hash function
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
   }
 }
 
