@@ -117,11 +117,15 @@ export const ChatMessage = React.memo<ChatMessageProps>(({
       </div>
       
           {/* Message Bubble */}
-          <div className={`relative group/message ${
-            isUser 
-              ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' 
-              : 'bg-white border border-gray-200 text-gray-800 shadow-sm hover:shadow-md'
-          } rounded-2xl px-4 py-3 max-w-full transition-all duration-200 hover:scale-[1.02]`}>
+          <div
+            className={`relative group/message ${
+              isUser 
+                ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' 
+                : 'bg-white border border-gray-200 text-gray-800 shadow-sm hover:shadow-md'
+            } rounded-2xl px-4 py-3 max-w-full transition-all duration-200 hover:scale-[1.02]`}
+            aria-label={isUser ? 'user message' : 'bot message'}
+            tabIndex={0}
+          >
             
             {/* Copy Button (for AI messages) */}
             {!isUser && (

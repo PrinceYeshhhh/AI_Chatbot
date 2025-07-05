@@ -3,6 +3,7 @@ import { X, Upload, FileText, Brain, Download, Trash2, AlertCircle, CheckCircle,
 import { chatService } from '../services/chatService';
 import { TrainingData } from '../types';
 import { VirtualList } from './VirtualList';
+import { getEnvVar } from '../utils/env';
 
 interface TrainingModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     const loadTrainingData = async () => {
       try {
-        const data = chatService.getTrainingData();
+        const data = await chatService.getTrainingData();
         setTrainedData(data);
       } catch (error) {
         console.error('Failed to load training data:', error);
@@ -107,7 +108,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose }) => {
       const formData = new FormData();
       formData.append('files', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`, {
+      const response = await fetch(`${getEnvVar('VITE_API_URL', 'http://localhost:3001')}/api/upload`, {
         method: 'POST',
         body: formData,
       });

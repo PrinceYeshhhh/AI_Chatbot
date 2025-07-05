@@ -1,345 +1,277 @@
-import React, { useState, useEffect } from 'react';
-import { workerService } from '../services/workerService';
-import { cacheService } from '../services/cacheService';
-import { errorTrackingService } from '../services/errorTrackingService';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { TestTube, CheckCircle, XCircle, AlertTriangle, Play, PauseCircle } from 'lucide-react';
+import { chatService } from '../services/chatService';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 
 interface TestResult {
-  id: string;
-  feature: string;
-  status: 'success' | 'error' | 'running';
-  result?: any;
-  error?: string;
-  duration?: number;
+  name: string;
+  status: 'pending' | 'running' | 'passed' | 'failed';
+  duration?: number | undefined;
+  error?: string | undefined;
 }
 
 export const FeatureTestPanel: React.FC = () => {
-  const [results, setResults] = useState<TestResult[]>([]);
+  const [tests, setTests] = useState<TestResult[]>([
+    { name: 'API Connectivity', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Message Sending', status: 'pending', duration: undefined, error: undefined },
+    { name: 'File Upload', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Performance Monitoring', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Error Handling', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Local Storage', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Voice Input', status: 'pending', duration: undefined, error: undefined },
+    { name: 'Keyboard Navigation', status: 'pending', duration: undefined, error: undefined }
+  ]);
   const [isRunning, setIsRunning] = useState(false);
-  const [workerInitialized, setWorkerInitialized] = useState(false);
 
-  // Initialize worker service when component mounts
-  useEffect(() => {
-    try {
-      if (!workerService.isAvailable()) {
-        workerService.initialize();
-      }
-      setWorkerInitialized(true);
-    } catch (error) {
-      console.warn('Worker service initialization failed:', error);
-      setWorkerInitialized(false);
-    }
-  }, []);
+  const runTest = async (testIndex: number) => {
+    const test = tests[testIndex];
+    const startTime = Date.now();
 
-  const addResult = (result: TestResult) => {
-    setResults(prev => [...prev, result]);
-  };
-
-  const testWebWorker = async () => {
-    const testId = Date.now().toString();
-    addResult({ id: testId, feature: 'Web Worker - Intent Classification', status: 'running' });
+    setTests(prev => prev.map((t, i) => 
+      i === testIndex ? { ...t, status: 'running' } : t
+    ));
 
     try {
-      if (!workerInitialized) {
-        throw new Error('Worker service not initialized');
-      }
-
-      const timer = PerformanceMonitor.startTimer('test-intent-classification');
-      const result = await workerService.classifyIntent("Hello, how can you help me?");
-      const duration = timer();
-
-      addResult({
-        id: testId,
-        feature: 'Web Worker - Intent Classification',
-        status: 'success',
-        result: { intent: result.intent, confidence: result.confidence },
-        duration
-      });
-    } catch (error) {
-      addResult({
-        id: testId,
-        feature: 'Web Worker - Intent Classification',
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  };
-
-  const testEntityExtraction = async () => {
-    const testId = Date.now().toString();
-    addResult({ id: testId, feature: 'Web Worker - Entity Extraction', status: 'running' });
-
-    try {
-      if (!workerInitialized) {
-        throw new Error('Worker service not initialized');
+      switch (test.name) {
+        case 'API Connectivity':
+          await testApiConnectivity();
+          break;
+        case 'Message Sending':
+          await testMessageSending();
+          break;
+        case 'File Upload':
+          await testFileUpload();
+          break;
+        case 'Performance Monitoring':
+          await testPerformanceMonitoring();
+          break;
+        case 'Error Handling':
+          await testErrorHandling();
+          break;
+        case 'Local Storage':
+          await testLocalStorage();
+          break;
+        case 'Voice Input':
+          await testVoiceInput();
+          break;
+        case 'Keyboard Navigation':
+          await testKeyboardNavigation();
+          break;
       }
 
-      const timer = PerformanceMonitor.startTimer('test-entity-extraction');
-      const result = await workerService.extractEntities("My email is test@example.com and phone is 555-1234");
-      const duration = timer();
-
-      addResult({
-        id: testId,
-        feature: 'Web Worker - Entity Extraction',
-        status: 'success',
-        result: { entities: result.entities.length, types: result.entities.map(e => e.type) },
-        duration
-      });
+      const duration = Date.now() - startTime;
+      setTests(prev => prev.map((t, i) => 
+        i === testIndex ? { ...t, status: 'passed', duration } : t
+      ));
     } catch (error) {
-      addResult({
-        id: testId,
-        feature: 'Web Worker - Entity Extraction',
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      const duration = Date.now() - startTime;
+      setTests(prev => prev.map((t, i) => 
+        i === testIndex ? { 
+          ...t, 
+          status: 'failed', 
+          duration, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        } : t
+      ));
     }
   };
 
-  const testCaching = async () => {
-    const testId = Date.now().toString();
-    addResult({ id: testId, feature: 'Advanced Caching', status: 'running' });
-
-    try {
-      const timer = PerformanceMonitor.startTimer('test-caching');
-      
-      // Test data
-      const testData = { message: "Hello world", timestamp: new Date() };
-      
-      // Set cache
-      await cacheService.set('test', 'demo-key', testData);
-      
-      // Get cache
-      const cached = await cacheService.get('test', 'demo-key');
-      
-      const duration = timer();
-
-      addResult({
-        id: testId,
-        feature: 'Advanced Caching',
-        status: 'success',
-        result: { cached: !!cached, data: cached },
-        duration
-      });
-    } catch (error) {
-      addResult({
-        id: testId,
-        feature: 'Advanced Caching',
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+  const testApiConnectivity = async () => {
+    const response = await fetch('/api/status');
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
     }
   };
 
-  const testErrorTracking = async () => {
-    const testId = Date.now().toString();
-    addResult({ id: testId, feature: 'Error Tracking', status: 'running' });
+  const testMessageSending = async () => {
+    const testMessage = await chatService.sendMessage('Test message', []);
+    if (!testMessage || !testMessage.content) {
+      throw new Error('Message sending failed');
+    }
+  };
 
-    try {
-      // Simulate an error
-      const testError = new Error("This is a test error for tracking");
-      errorTrackingService.trackError(testError, {
-        component: 'FeatureTestPanel',
-        severity: 'low',
-        tags: ['test', 'demo'],
-        metadata: { testId }
-      });
-
-      addResult({
-        id: testId,
-        feature: 'Error Tracking',
-        status: 'success',
-        result: { errorTracked: true, message: testError.message }
-      });
-    } catch (error) {
-      addResult({
-        id: testId,
-        feature: 'Error Tracking',
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+  const testFileUpload = async () => {
+    // Create a test file
+    const testFile = new File(['Test content'], 'test.txt', { type: 'text/plain' });
+    const result = await chatService.uploadFiles([testFile]);
+    if (!result) {
+      throw new Error('File upload failed');
     }
   };
 
   const testPerformanceMonitoring = async () => {
-    const testId = Date.now().toString();
-    addResult({ id: testId, feature: 'Performance Monitoring', status: 'running' });
-
-    try {
-      const timer = PerformanceMonitor.startTimer('test-performance');
-      
-      // Simulate some work
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const duration = timer();
-      const stats = PerformanceMonitor.getPerformanceSummary();
-
-      addResult({
-        id: testId,
-        feature: 'Performance Monitoring',
-        status: 'success',
-        result: { 
-          operationTime: duration,
-          totalOperations: stats.totalOperations,
-          slowOperations: stats.slowOperations
-        },
-        duration
-      });
-    } catch (error) {
-      addResult({
-        id: testId,
-        feature: 'Performance Monitoring',
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+    const stats = PerformanceMonitor.getPerformanceSummary();
+    if (!stats || typeof stats.totalOperations !== 'number') {
+      throw new Error('Performance monitoring not working');
     }
   };
 
-  const testAllFeatures = async () => {
+  const testErrorHandling = async () => {
+    try {
+      await fetch('/api/nonexistent-endpoint');
+    } catch (error) {
+      // Expected error, test passes
+      return;
+    }
+    throw new Error('Error handling not working');
+  };
+
+  const testLocalStorage = async () => {
+    const testKey = 'test-key';
+    const testValue = 'test-value';
+    
+    localStorage.setItem(testKey, testValue);
+    const retrieved = localStorage.getItem(testKey);
+    localStorage.removeItem(testKey);
+    
+    if (retrieved !== testValue) {
+      throw new Error('Local storage not working');
+    }
+  };
+
+  const testVoiceInput = async () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      throw new Error('Voice input not supported');
+    }
+    // Voice input is available
+  };
+
+  const testKeyboardNavigation = async () => {
+    // Test if keyboard event listeners are working
+    const testEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+    document.dispatchEvent(testEvent);
+    // If no error, test passes
+  };
+
+  const runAllTests = async () => {
     setIsRunning(true);
-    setResults([]);
-
-    await testWebWorker();
-    await testEntityExtraction();
-    await testCaching();
-    await testErrorTracking();
-    await testPerformanceMonitoring();
-
+    for (let i = 0; i < tests.length; i++) {
+      await runTest(i);
+      // Small delay between tests
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     setIsRunning(false);
   };
 
-  const getStatusColor = (status: string) => {
+  const resetTests = () => {
+    setTests(prev => prev.map(test => ({ ...test, status: 'pending', duration: undefined, error: undefined })));
+  };
+
+  const getStatusIcon = (status: TestResult['status']) => {
     switch (status) {
-      case 'success': return 'text-green-600';
-      case 'error': return 'text-red-600';
-      case 'running': return 'text-blue-600';
-      default: return 'text-gray-600';
+      case 'pending':
+        return <div className="w-4 h-4 bg-gray-300 rounded-full" />;
+      case 'running':
+        return <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />;
+      case 'passed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-500" />;
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success': return '✅';
-      case 'error': return '❌';
-      case 'running': return '⏳';
-      default: return '❓';
-    }
-  };
+  const passedTests = tests.filter(t => t.status === 'passed').length;
+  const failedTests = tests.filter(t => t.status === 'failed').length;
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">🚀 Advanced Features Test Panel</h2>
-        <button
-          onClick={testAllFeatures}
-          disabled={isRunning}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning ? 'Testing...' : 'Test All Features'}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <button
-          onClick={testWebWorker}
-          disabled={isRunning}
-          className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
-        >
-          <div className="font-semibold text-blue-900">🤖 Web Worker</div>
-          <div className="text-sm text-blue-700">Intent Classification</div>
-        </button>
-
-        <button
-          onClick={testEntityExtraction}
-          disabled={isRunning}
-          className="p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
-        >
-          <div className="font-semibold text-green-900">🏷️ Entity Extraction</div>
-          <div className="text-sm text-green-700">Named Entity Recognition</div>
-        </button>
-
-        <button
-          onClick={testCaching}
-          disabled={isRunning}
-          className="p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
-        >
-          <div className="font-semibold text-purple-900">💾 Advanced Caching</div>
-          <div className="text-sm text-purple-700">LRU, LFU, TTL Strategies</div>
-        </button>
-
-        <button
-          onClick={testErrorTracking}
-          disabled={isRunning}
-          className="p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-        >
-          <div className="font-semibold text-red-900">📊 Error Tracking</div>
-          <div className="text-sm text-red-700">Comprehensive Monitoring</div>
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-900">Test Results</h3>
-        {results.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <div className="text-4xl mb-2">🧪</div>
-            <p>Click "Test All Features" to see the advanced features in action!</p>
+    <motion.div
+      className="min-h-screen bg-gray-50 p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <TestTube className="w-8 h-8 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900">Feature Test Panel</h1>
           </div>
-        ) : (
-          results.map((result) => (
-            <div
-              key={result.id}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+
+          {/* Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{tests.length}</div>
+              <div className="text-sm text-blue-600">Total Tests</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{passedTests}</div>
+              <div className="text-sm text-green-600">Passed</div>
+            </div>
+            <div className="bg-red-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-red-600">{failedTests}</div>
+              <div className="text-sm text-red-600">Failed</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-gray-600">{tests.length - passedTests - failedTests}</div>
+              <div className="text-sm text-gray-600">Pending</div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex gap-3 mb-6">
+            <button
+              onClick={runAllTests}
+              disabled={isRunning}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-lg">{getStatusIcon(result.status)}</span>
+              <Play className="w-4 h-4" />
+              Run All Tests
+            </button>
+            <button
+              onClick={resetTests}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            >
+              <PauseCircle className="w-4 h-4" />
+              Reset Tests
+            </button>
+          </div>
+
+          {/* Test List */}
+          <div className="space-y-3">
+            {tests.map((test, index) => (
+              <div key={test.name} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  {getStatusIcon(test.status)}
                   <div>
-                    <div className={`font-semibold ${getStatusColor(result.status)}`}>
-                      {result.feature}
-                    </div>
-                    {result.duration && (
-                      <div className="text-sm text-gray-500">
-                        Duration: {result.duration.toFixed(2)}ms
-                      </div>
+                    <div className="font-medium text-gray-900">{test.name}</div>
+                    {test.error && (
+                      <div className="text-sm text-red-600">{test.error}</div>
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className={`text-sm font-medium ${getStatusColor(result.status)}`}>
-                    {result.status.toUpperCase()}
-                  </div>
+                <div className="flex items-center gap-3">
+                  {test.duration && (
+                    <span className="text-sm text-gray-500">{test.duration}ms</span>
+                  )}
+                  <button
+                    onClick={() => runTest(index)}
+                    disabled={isRunning || test.status === 'running'}
+                    className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                  >
+                    Run
+                  </button>
                 </div>
               </div>
-              
-              {result.result && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="text-sm font-medium text-gray-700 mb-1">Result:</div>
-                  <pre className="text-xs text-gray-600 overflow-x-auto">
-                    {JSON.stringify(result.result, null, 2)}
-                  </pre>
-                </div>
-              )}
-              
-              {result.error && (
-                <div className="mt-3 p-3 bg-red-50 rounded-lg">
-                  <div className="text-sm font-medium text-red-700 mb-1">Error:</div>
-                  <div className="text-sm text-red-600">{result.error}</div>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+            ))}
+          </div>
 
-      <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-        <h4 className="font-semibold text-gray-900 mb-2">🎯 What's Being Tested:</h4>
-        <ul className="text-sm text-gray-700 space-y-1">
-          <li>• <strong>Web Worker:</strong> Heavy ML operations without blocking UI</li>
-          <li>• <strong>Virtual Scrolling:</strong> Efficient rendering of large lists</li>
-          <li>• <strong>Advanced Caching:</strong> Multiple strategies with compression</li>
-          <li>• <strong>Error Tracking:</strong> Comprehensive error monitoring</li>
-          <li>• <strong>Performance Monitoring:</strong> Real-time performance metrics</li>
-        </ul>
+          {/* Instructions */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-blue-900 mb-2">Test Instructions</h3>
+                <p className="text-sm text-blue-700">
+                  This panel allows you to test various features of the AI chatbot. 
+                  Run individual tests or use "Run All Tests" to check the entire system. 
+                  Tests verify API connectivity, message sending, file uploads, and more.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }; 

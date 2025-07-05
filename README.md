@@ -423,3 +423,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ ] Ensure all new features and improvements are reflected in this README and in backend docs.
 - [ ] Add/expand OpenAPI/Swagger docs as needed.
 - [ ] Mark any ambiguous or in-progress features for further review.
+
+## Environment Variables
+
+All required environment variables for both frontend and backend are documented in:
+- `.env.example` (frontend)
+- `server/env.example` (backend)
+
+**Do not commit secrets to the repository.**
+- For local development, copy these files to `.env` and `server/.env` and fill in your real values.
+- For production (Render), set all secrets and environment variables in the Render dashboard only.
+
+### Frontend Required Variables
+- `VITE_API_URL`: URL of your backend API
+- `VITE_SUPABASE_URL`: Your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY`: Your Supabase anon key
+- `VITE_ENABLE_STREAMING`, `VITE_ENABLE_CACHING`, etc.: Feature flags (optional)
+
+### Backend Required Variables
+- `PORT`, `NODE_ENV`, `CORS_ORIGIN`: Server and CORS config
+- `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL`, etc.: OpenAI config
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: Supabase config
+- `REDIS_URL`, `CACHE_TTL_SECONDS`, etc.: Redis/cache config (if used)
+- `LOG_LEVEL`, `ENABLE_HELMET`, etc.: Logging and security
+
+See the example files for the full list and descriptions.
+
+## Render Monitoring & Alerts
+
+### Viewing Logs
+- Go to your Render dashboard.
+- Select your backend service.
+- Click the "Logs" tab to view real-time logs (all winston logs, errors, and Sentry events are visible).
+
+### Setting Up Alerts
+- In Render, go to the "Alerts" section of your service.
+- Enable alerts for downtime, failed deploys, and high error rates.
+- Optionally, set up email or Slack notifications for critical events.

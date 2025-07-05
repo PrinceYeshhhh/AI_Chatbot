@@ -2,10 +2,10 @@ const CACHE_NAME = 'ai-chatbot-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/src/main.tsx',
-  '/src/App.tsx',
-  '/src/index.css',
-  '/favicon.svg'
+  '/static/js/bundle.js',
+  '/static/css/main.css',
+  '/favicon.ico',
+  '/manifest.json'
 ];
 
 // Install event - cache resources
@@ -19,24 +19,8 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Fetch event - serve from cache when offline
+// Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
-  // Skip API calls and external requests
-  if (event.request.url.includes('/api/') || 
-      event.request.url.includes('localhost:3001') ||
-      event.request.url.includes('localhost:5173/chat') ||
-      event.request.url.includes('localhost:5173/api')) {
-    // For API calls, just fetch from network, don't cache
-    event.respondWith(fetch(event.request).catch(() => {
-      // If network fails, return a simple error response
-      return new Response(JSON.stringify({ error: 'Network error' }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }));
-    return;
-  }
-
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -44,11 +28,10 @@ self.addEventListener('fetch', (event) => {
         return response || fetch(event.request);
       })
       .catch(() => {
-        // If both cache and network fail, return a fallback
+        // Return offline page if both cache and network fail
         if (event.request.destination === 'document') {
-          return caches.match('/index.html');
+          return caches.match('/offline.html');
         }
-        return new Response('Offline content not available', { status: 503 });
       })
   );
 });
@@ -78,9 +61,32 @@ self.addEventListener('sync', (event) => {
 
 async function doBackgroundSync() {
   try {
-    // Sync any pending messages when back online
-    console.log('Background sync triggered');
+    // Get stored messages from IndexedDB
+    const messages = await getStoredMessages();
+    
+    // Send them to the server
+    for (const message of messages) {
+      await sendMessageToServer(message);
+    }
+    
+    // Clear stored messages
+    await clearStoredMessages();
   } catch (error) {
     console.error('Background sync failed:', error);
   }
+}
+
+async function getStoredMessages() {
+  // Implementation would use IndexedDB
+  return [];
+}
+
+async function sendMessageToServer(message) {
+  // Implementation would send to API
+  console.log('Sending stored message:', message);
+}
+
+async function clearStoredMessages() {
+  // Implementation would clear IndexedDB
+  console.log('Clearing stored messages');
 } 

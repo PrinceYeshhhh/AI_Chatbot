@@ -1,9 +1,15 @@
+# Render Blueprint for Fullstack AI Chatbot
+# Defines two services: frontend (React/Vite) and backend (Node.js/Express API)
+
 services:
+  # --- Frontend Web Service ---
   - type: web
     name: ai-chatbot-frontend
     env: docker
-    plan: free
+    autoDeploy: true
     dockerfilePath: ./Dockerfile
+    buildCommand: npm run build
+    startCommand: '' # Nginx serves static files, so no start command needed
     buildFilter:
       paths:
         - Dockerfile
@@ -18,18 +24,20 @@ services:
         value: production
       - key: VITE_API_URL
         value: https://ai-chatbot-backend.onrender.com
-      # Supabase config for frontend
       - key: VITE_SUPABASE_URL
-        value: "<your-supabase-url>" # TODO: Fill with your Supabase project URL
+        value: '' # Set in Render dashboard
       - key: VITE_SUPABASE_ANON_KEY
-        value: "<your-supabase-anon-key>" # TODO: Fill with your Supabase anon key
-      # Add other frontend env vars as needed
+        value: '' # Set in Render dashboard
+      # Add other frontend env vars as needed (feature flags, etc.)
 
+  # --- Backend API Service ---
   - type: web
     name: ai-chatbot-backend
     env: docker
-    plan: free
+    autoDeploy: true
     dockerfilePath: ./server/Dockerfile
+    buildCommand: npm ci --only=production
+    startCommand: npm start
     buildFilter:
       paths:
         - server/**
@@ -39,7 +47,7 @@ services:
       - key: PORT
         value: 3001
       - key: OPENAI_API_KEY
-        sync: false
+        sync: false # Marked as secret, set in Render dashboard
       - key: OPENAI_MODEL
         value: gpt-3.5-turbo
       - key: OPENAI_EMBEDDING_MODEL
@@ -48,13 +56,22 @@ services:
         value: info
       - key: CORS_ORIGIN
         value: https://ai-chatbot-frontend.onrender.com
-      # Supabase config for backend
       - key: SUPABASE_URL
-        value: "<your-supabase-url>" # TODO: Fill with your Supabase project URL
+        value: '' # Set in Render dashboard
       - key: SUPABASE_SERVICE_ROLE_KEY
-        value: "<your-supabase-service-role-key>" # TODO: Fill with your Supabase service role key
+        sync: false # Marked as secret, set in Render dashboard
+      # Optional/secure backend env vars
+      - key: REDIS_URL
+        value: '' # Set in Render dashboard if using Redis
+      - key: CACHE_TTL_SECONDS
+        value: '3600'
+      - key: MAX_CACHE_SIZE
+        value: '1000'
+      - key: ENABLE_MEMORY_CACHE
+        value: 'true'
       # Add other backend env vars as needed
 
+  # --- Redis Service (Optional, for caching) ---
   - type: redis
     name: ai-chatbot-redis
     plan: free

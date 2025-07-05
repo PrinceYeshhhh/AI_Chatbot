@@ -53,15 +53,15 @@ export class SecurityUtils {
   }
 
   /**
-   * Mask API key for logging (shows only first 7 and last 4 characters)
+   * Mask API key for logging (shows only first 8 and last 4 characters)
    * @param key - API key to mask
    * @returns Masked API key
    */
   static maskApiKey(key: string): string {
-    if (!key || key.length < 12) {
-      return '***';
-    }
-    return `${key.slice(0, 7)}...${key.slice(-4)}`;
+    if (!key) return '';
+    if (!key.startsWith(this.API_KEY_PREFIX) || key.length < 12) return key;
+    // Show first 6 characters after sk- prefix and last 4 characters
+    return `${key.slice(0, 6)}...${key.slice(-4)}`;
   }
 
   /**
@@ -99,45 +99,44 @@ export class SecurityUtils {
     input: string, 
     expectedOutput: string, 
     intent: string
-  ): { isValid: boolean; error?: string } {
+  ): { isValid: boolean; error: string | null } {
     // Validate input
     if (!input || typeof input !== 'string') {
       return { isValid: false, error: 'Training input is required and must be a string' };
     }
-
     if (input.length > this.MAX_TRAINING_INPUT_LENGTH) {
       return { 
         isValid: false, 
         error: `Training input must be ${this.MAX_TRAINING_INPUT_LENGTH} characters or less` 
       };
     }
-
+    if (this.containsMaliciousContent(input)) {
+      return { isValid: false, error: 'Input contains potentially dangerous content' };
+    }
     // Validate expected output
     if (!expectedOutput || typeof expectedOutput !== 'string') {
       return { isValid: false, error: 'Expected output is required and must be a string' };
     }
-
     if (expectedOutput.length > this.MAX_INPUT_LENGTH) {
       return { 
         isValid: false, 
         error: `Expected output must be ${this.MAX_INPUT_LENGTH} characters or less` 
       };
     }
-
+    if (this.containsMaliciousContent(expectedOutput)) {
+      return { isValid: false, error: 'Expected output contains potentially dangerous content' };
+    }
     // Validate intent
     if (!intent || typeof intent !== 'string') {
       return { isValid: false, error: 'Intent is required and must be a string' };
     }
-
     if (intent.length > 100) {
       return { isValid: false, error: 'Intent must be 100 characters or less' };
     }
-
     if (!/^[a-zA-Z0-9_\-\s]+$/.test(intent)) {
       return { isValid: false, error: 'Intent can only contain letters, numbers, spaces, hyphens, and underscores' };
     }
-
-    return { isValid: true };
+    return { isValid: true, error: null };
   }
 
   /**

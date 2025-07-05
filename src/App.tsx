@@ -178,12 +178,12 @@ const PerformancePanel: React.FC = () => {
     <div className="space-y-1">
       <div>Operations: {stats.totalOperations}</div>
       <div>Slow: {stats.slowOperations}</div>
-      <div>Avg: {stats.averageTime.toFixed(1)}ms</div>
-      {stats.slowestOperation && (
+      <div>Avg: {typeof stats.averageResponseTime === 'number' && !isNaN(stats.averageResponseTime) ? stats.averageResponseTime.toFixed(1) : 'N/A'}ms</div>
+      {stats.slowestOperation && typeof stats.slowestOperation === 'object' && stats.slowestOperation.label && typeof stats.slowestOperation.duration === 'number' ? (
         <div className="text-red-400">
           Slowest: {stats.slowestOperation.label} ({stats.slowestOperation.duration.toFixed(0)}ms)
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

@@ -33,7 +33,7 @@ export interface TrainingData {
 
 export interface ApiConfig {
   endpoint: string;
-  apiKey: string;
+  apiKey?: string;
   model: string;
   temperature: number;
   maxTokens: number;

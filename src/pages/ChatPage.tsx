@@ -53,6 +53,14 @@ const ChatPage: React.FC = () => {
     sendMessage(template);
   };
 
+  const handleVoiceTranscript = (transcript: string) => {
+    if (showOnboarding) {
+      setShowOnboarding(false);
+      localStorage.setItem('chatbot-onboarding-seen', 'true');
+    }
+    sendMessage(transcript);
+  };
+
   const handleDismissOnboarding = () => {
     setShowOnboarding(false);
     localStorage.setItem('chatbot-onboarding-seen', 'true');
@@ -219,7 +227,10 @@ const ChatPage: React.FC = () => {
             <div className="border-t border-gray-200 bg-white sticky bottom-0 z-10">
               <div className="max-w-4xl mx-auto px-4 lg:px-6">
                 <div className="flex items-center gap-2 py-2">
-                  <VoiceInputButton />
+                  <VoiceInputButton 
+                    onTranscript={handleVoiceTranscript}
+                    disabled={isTyping}
+                  />
                   <SaveChatButton conversation={currentConversation} />
                 </div>
                 <ChatInput

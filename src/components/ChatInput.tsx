@@ -48,16 +48,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || disabled || isProcessing) return;
+    const trimmedMessage = message.trim();
+    // Stricter validation
+    const validationError = validateMessage(trimmedMessage);
+    if (validationError) {
+      onError?.(validationError);
+      return;
+    }
+    if (disabled || isProcessing) return;
     setIsProcessing(true);
     try {
-      const trimmedMessage = message.trim();
-      // Stricter validation
-      const validationError = validateMessage(trimmedMessage);
-      if (validationError) {
-        onError?.(validationError);
-        return;
-      }
       await onSendMessage(trimmedMessage);
       setMessage('');
       if (textareaRef.current) {
@@ -94,17 +94,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleVoiceInput = () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      setIsRecording(true);
-      // Voice recognition logic would go here
-      // For now, just simulate
-      setTimeout(() => {
-        setIsRecording(false);
-        setMessage(prev => prev + ' Voice input placeholder');
-      }, 2000);
-    } else {
-      alert('Voice input is not supported in this browser');
-    }
+    // Voice input is now handled by VoiceInputButton component
+    // This function is kept for backward compatibility
+    console.log('Voice input handled by VoiceInputButton component');
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,6 +154,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               onClick={() => setShowAttachments(false)}
               className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+              aria-label="Close"
             >
               <X className="w-4 h-4 text-gray-500" />
             </button>

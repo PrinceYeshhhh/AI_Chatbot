@@ -154,23 +154,32 @@ export class PerformanceMonitor {
   static getPerformanceSummary(): {
     totalOperations: number;
     slowOperations: number;
-    averageTime: number;
-    slowestOperation: { label: string; duration: number } | null;
+    averageResponseTime: number;
+    slowestOperation: string | null;
+    operations: Record<string, { avg: number; max: number; min: number; count: number; recent: any[] }>;
   } {
     let totalOperations = 0;
     let slowOperations = 0;
     let totalTime = 0;
     let slowestOperation: { label: string; duration: number } | null = null;
+    const operations: Record<string, { avg: number; max: number; min: number; count: number; recent: any[] }> = {};
 
     for (const [label, metrics] of this.metrics) {
+      if (metrics.length === 0) continue;
+      const durations = metrics.map(m => m.duration);
+      operations[label] = {
+        avg: durations.reduce((a, b) => a + b, 0) / durations.length,
+        max: Math.max(...durations),
+        min: Math.min(...durations),
+        count: durations.length,
+        recent: metrics.slice(-10)
+      };
       for (const metric of metrics) {
         totalOperations++;
         totalTime += metric.duration;
-        
         if (metric.duration > this.slowOperationThreshold) {
           slowOperations++;
         }
-
         if (!slowestOperation || metric.duration > slowestOperation.duration) {
           slowestOperation = { label, duration: metric.duration };
         }
@@ -180,8 +189,9 @@ export class PerformanceMonitor {
     return {
       totalOperations,
       slowOperations,
-      averageTime: totalOperations > 0 ? totalTime / totalOperations : 0,
-      slowestOperation
+      averageResponseTime: totalOperations > 0 ? totalTime / totalOperations : 0,
+      slowestOperation: slowestOperation ? slowestOperation.label : null,
+      operations
     };
   }
 

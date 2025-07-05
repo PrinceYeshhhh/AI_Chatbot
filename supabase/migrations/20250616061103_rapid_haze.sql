@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     name TEXT,
     mobile TEXT,
     username TEXT UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now())
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()),
+    role_id integer references roles(id)
 );
 
 -- Create indexes for performance
@@ -189,5 +190,73 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO chatbot;
 -- CREATE POLICY conversations_user_policy ON conversations
 --     FOR ALL TO authenticated
 --     USING (user_id = current_user_id());
+
+-- Enable RLS and add policy for chat_messages
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can access their own data"
+  ON messages
+  FOR SELECT, INSERT, UPDATE, DELETE
+  USING (auth.uid() = user_id);
+
+-- Enable RLS and add policy for training_files
+ALTER TABLE file_uploads ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can access their own data"
+  ON file_uploads
+  FOR SELECT, INSERT, UPDATE, DELETE
+  USING (auth.uid() = user_id);
+
+-- Advanced RBAC migration
+
+-- Roles table
+CREATE TABLE IF NOT EXISTS roles (
+  id serial primary key,
+  name text unique not null
+);
+
+-- Permissions table
+CREATE TABLE IF NOT EXISTS permissions (
+  id serial primary key,
+  name text unique not null
+);
+
+-- Role-Permissions join table
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id integer references roles(id) on delete cascade,
+  permission_id integer references permissions(id) on delete cascade,
+  primary key (role_id, permission_id)
+);
+
+-- Insert default roles
+INSERT INTO roles (name) VALUES ('user') ON CONFLICT DO NOTHING;
+INSERT INTO roles (name) VALUES ('moderator') ON CONFLICT DO NOTHING;
+INSERT INTO roles (name) VALUES ('admin') ON CONFLICT DO NOTHING;
+
+-- Insert default permissions
+INSERT INTO permissions (name) VALUES ('read_chat') ON CONFLICT DO NOTHING;
+INSERT INTO permissions (name) VALUES ('post_chat') ON CONFLICT DO NOTHING;
+INSERT INTO permissions (name) VALUES ('delete_message') ON CONFLICT DO NOTHING;
+INSERT INTO permissions (name) VALUES ('manage_users') ON CONFLICT DO NOTHING;
+INSERT INTO permissions (name) VALUES ('view_logs') ON CONFLICT DO NOTHING;
+
+-- Assign permissions to roles (example)
+-- user: read_chat, post_chat
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p
+WHERE r.name = 'user' AND p.name IN ('read_chat', 'post_chat')
+ON CONFLICT DO NOTHING;
+-- moderator: user perms + delete_message
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p
+WHERE r.name = 'moderator' AND p.name IN ('read_chat', 'post_chat', 'delete_message')
+ON CONFLICT DO NOTHING;
+-- admin: all perms
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p
+WHERE r.name = 'admin'
+  AND p.name IN ('read_chat', 'post_chat', 'delete_message', 'manage_users', 'view_logs')
+ON CONFLICT DO NOTHING;
+
+-- Set default role_id for new profiles (user)
+UPDATE profiles SET role_id = (SELECT id FROM roles WHERE name = 'user') WHERE role_id IS NULL;
 
 COMMIT;

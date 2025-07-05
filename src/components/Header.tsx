@@ -1,5 +1,6 @@
 import React from 'react';
 import { Settings, Database, Sparkles, MessageSquare, Brain } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -9,6 +10,8 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenTraining, onOpenChat, activeTab }) => {
+  const { user, logout } = useAuth();
+
   return (
     <header className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white shadow-lg border-b border-blue-500/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -50,7 +53,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenTraining, onOpenC
             </button>
           </nav>
 
-          {/* Action Buttons */}
+          {/* Action Buttons + Auth */}
           <div className="flex items-center space-x-3">
             <button
               onClick={onOpenTraining}
@@ -67,6 +70,20 @@ const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenTraining, onOpenC
             >
               <Settings className="w-5 h-5" />
             </button>
+            {/* Auth Info */}
+            {user && (
+              <div className="flex items-center space-x-2 ml-4">
+                <span className="text-sm font-medium text-white bg-blue-700/60 px-3 py-1 rounded-lg">
+                  {user.email}
+                </span>
+                <button
+                  onClick={logout}
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all duration-200"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -3,16 +3,17 @@ import { SecurityUtils } from '../utils/security';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { cacheService } from './cacheService';
 import { errorTrackingService } from './errorTrackingService';
+import { getEnvVar } from '../utils/env';
 
 class ChatService {
   private apiConfig: ApiConfig = {
-    endpoint: import.meta.env.VITE_API_BASE_URL + '/api/chat' || 'http://localhost:3001/api/chat',
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
-    model: import.meta.env.VITE_OPENAI_MODEL || 'gpt-3.5-turbo',
+    endpoint: (getEnvVar('VITE_API_URL', 'http://localhost:3001') as string) + '/api/chat/dev',
+    model: getEnvVar('VITE_OPENAI_MODEL', 'gpt-3.5-turbo') as string,
     temperature: 0.7,
     maxTokens: 1000,
     timeout: 30000,
-    retryAttempts: 3
+    retries: 3,
+    streaming: true
   };
 
   private trainingData: TrainingData[] = [];
@@ -20,6 +21,16 @@ class ChatService {
 
   constructor() {
     this.loadApiConfig();
+
+    if (!getEnvVar('VITE_API_URL')) {
+      throw new Error('VITE_API_URL is not set. Please check your environment configuration.');
+    }
+    if (!getEnvVar('VITE_SUPABASE_URL')) {
+      throw new Error('VITE_SUPABASE_URL is not set. Please check your environment configuration.');
+    }
+    if (!getEnvVar('VITE_SUPABASE_ANON_KEY')) {
+      throw new Error('VITE_SUPABASE_ANON_KEY is not set. Please check your environment configuration.');
+    }
   }
 
   private loadApiConfig(): void {
@@ -503,7 +514,7 @@ class ChatService {
   async uploadFiles(files: File[], onProgress?: (percent: number) => void): Promise<any> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      const url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/upload`;
+      const url = `${getEnvVar('VITE_API_URL', 'http://localhost:3001') as string}/api/upload`;
       xhr.open('POST', url);
 
       xhr.upload.onprogress = (event) => {

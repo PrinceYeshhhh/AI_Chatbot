@@ -137,7 +137,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Input cannot be empty');
+      expect(result.error).toContain('Training input is required and must be a string');
     });
 
     test('should reject empty expected output', () => {
@@ -148,7 +148,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Expected output cannot be empty');
+      expect(result.error).toContain('Expected output is required and must be a string');
     });
 
     test('should reject empty intent', () => {
@@ -159,7 +159,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Intent cannot be empty');
+      expect(result.error).toContain('Intent is required and must be a string');
     });
 
     test('should reject input that is too long', () => {
@@ -171,7 +171,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Input is too long');
+      expect(result.error).toContain('Training input must be 1000 characters or less');
     });
 
     test('should reject output that is too long', () => {
@@ -183,7 +183,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Expected output is too long');
+      expect(result.error).toContain('Expected output must be 4000 characters or less');
     });
 
     test('should reject intent that is too long', () => {
@@ -195,7 +195,7 @@ describe('SecurityUtils', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Intent is too long');
+      expect(result.error).toContain('Intent must be 100 characters or less');
     });
 
     test('should reject input with dangerous content', () => {
