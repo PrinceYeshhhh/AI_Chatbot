@@ -13,7 +13,10 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "jest --watchAll",
+    "test:ci": "jest --coverage --watchAll=false --passWithNoTests",
+    "test:coverage": "jest --coverage --watchAll=false",
     "preview": "vite preview",
     "install:backend": "cd server && npm install",
     "start:backend": "cd server && npm start",
@@ -22,7 +25,10 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "ci:all": "npm run lint && npm run format:check && npm run test:ci && npm run build",
+    "security:audit": "npm audit --audit-level=moderate",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
