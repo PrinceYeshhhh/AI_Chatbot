@@ -40,8 +40,14 @@ export class DocumentProcessor {
       chunkSize: 1000,
       chunkOverlap: 200,
     });
+    
+    const openAIApiKey = process.env.OPENAI_API_KEY;
+    if (!openAIApiKey) {
+      throw new Error('OPENAI_API_KEY is required for document processing');
+    }
+    
     this.embeddings = new OpenAIEmbeddings({
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      openAIApiKey,
     });
   }
 

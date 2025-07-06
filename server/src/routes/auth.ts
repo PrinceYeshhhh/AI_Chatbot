@@ -11,7 +11,10 @@ import bcrypt from 'bcrypt';
 dotenv.config();
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-for-development-only-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required for authentication');
+}
 
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {

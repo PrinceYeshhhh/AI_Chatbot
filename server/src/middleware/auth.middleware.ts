@@ -4,7 +4,8 @@ import { Request, Response, NextFunction } from 'express';
 import { UserPayload } from '../types/jwt';
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-for-development-only-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+
 
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET not set in environment variables');
@@ -18,7 +19,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 
   const token = authHeader.substring(7);
-  const jwtSecret = process.env.JWT_SECRET || JWT_SECRET;
+  const jwtSecret = JWT_SECRET;
 
   if (!jwtSecret) {
     res.status(500).json({ error: 'JWT secret not configured' });
