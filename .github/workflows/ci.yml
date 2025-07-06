@@ -1,0 +1,96 @@
+name: Full CI/CD Pipeline
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # --- Frontend Checks ---
+      - name: Install frontend dependencies
+        run: |
+          cd project
+          npm ci
+
+      - name: Lint frontend
+        run: |
+          cd project
+          npm run lint || exit 1
+
+      - name: TypeScript build frontend
+        run: |
+          cd project
+          npm run build || exit 1
+
+      - name: Prettier check frontend
+        run: |
+          cd project
+          npm run format -- --check || exit 1
+
+      - name: npm audit frontend
+        run: |
+          cd project
+          npm audit --audit-level=moderate || exit 1
+
+      # --- Backend Checks ---
+      - name: Install backend dependencies
+        run: |
+          cd project/server
+          npm ci
+
+      - name: Lint backend
+        run: |
+          cd project/server
+          npm run lint || exit 1
+
+      - name: TypeScript build backend
+        run: |
+          cd project/server
+          npm run build || exit 1
+
+      - name: Prettier check backend
+        run: |
+          cd project/server
+          npm run format -- --check || exit 1
+
+      - name: npm audit backend
+        run: |
+          cd project/server
+          npm audit --audit-level=moderate || exit 1
+
+      # --- Tests (if present) ---
+      - name: Run frontend tests
+        run: |
+          cd project
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then npm test || exit 1; else echo "No frontend tests"; fi
+
+      - name: Run backend tests
+        run: |
+          cd project/server
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then npm test || exit 1; else echo "No backend tests"; fi
+
+      # --- Docker Build (optional, for validation) ---
+      - name: Build frontend Docker image
+        run: |
+          cd project
+          if [ -f "Dockerfile" ]; then docker build . --file Dockerfile --tag frontend-image:ci; else echo "No frontend Dockerfile"; fi
+
+      - name: Build backend Docker image
+        run: |
+          cd project/server
+          if [ -f "Dockerfile" ]; then docker build . --file Dockerfile --tag backend-image:ci; else echo "No backend Dockerfile"; fi 

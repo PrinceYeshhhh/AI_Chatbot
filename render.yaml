@@ -1,35 +1,7 @@
-# Render Blueprint for Fullstack AI Chatbot
-# Defines two services: frontend (React/Vite) and backend (Node.js/Express API)
+# Render Blueprint for AI Chatbot Backend
+# Frontend is deployed separately on Vercel
 
 services:
-  # --- Frontend Web Service ---
-  - type: web
-    name: ai-chatbot-frontend
-    env: docker
-    autoDeploy: true
-    dockerfilePath: ./Dockerfile
-    buildCommand: npm run build
-    startCommand: '' # Nginx serves static files, so no start command needed
-    buildFilter:
-      paths:
-        - Dockerfile
-        - package.json
-        - package-lock.json
-        - src/**
-        - public/**
-        - vite.config.ts
-        - nginx.conf
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: VITE_API_URL
-        value: https://ai-chatbot-backend.onrender.com
-      - key: VITE_SUPABASE_URL
-        value: '' # Set in Render dashboard
-      - key: VITE_SUPABASE_ANON_KEY
-        value: '' # Set in Render dashboard
-      # Add other frontend env vars as needed (feature flags, etc.)
-
   # --- Backend API Service ---
   - type: web
     name: ai-chatbot-backend
@@ -55,7 +27,7 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: CORS_ORIGIN
-        value: https://ai-chatbot-frontend.onrender.com
+        value: https://your-frontend-name.vercel.app
       - key: SUPABASE_URL
         value: '' # Set in Render dashboard
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -69,6 +41,18 @@ services:
         value: '1000'
       - key: ENABLE_MEMORY_CACHE
         value: 'true'
+      - key: JWT_SECRET
+        sync: false # Marked as secret, set in Render dashboard
+      - key: ENABLE_HELMET
+        value: 'true'
+      - key: ENABLE_COMPRESSION
+        value: 'true'
+      - key: ENABLE_REQUEST_LOGGING
+        value: 'true'
+      - key: RATE_LIMIT_WINDOW_MS
+        value: '900000'
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: '100'
       # Add other backend env vars as needed
 
   # --- Redis Service (Optional, for caching) ---

@@ -7,7 +7,6 @@ import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import * as fs from 'fs';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { validateEnv } from './utils/schemas';
@@ -149,24 +148,23 @@ const swaggerDefinition = {
 
 const swaggerOptions = {
   swaggerDefinition,
-  apis: ['./src/routes/*.js'],
+  apis: ['./src/routes/*.ts'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const frontendDistPath = path.resolve(__dirname, '../../dist');
-app.use(express.static(frontendDistPath));
-app.get('*', (_req: Request, res: Response) => {
-  const indexPath = path.join(frontendDistPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).json({
-      error: 'Frontend build not found.',
-      message: 'Please run the frontend build process.',
-    });
-  }
+// Serve backend API only - frontend is deployed separately
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    message: 'AI Chatbot Backend API',
+    version: process.env.npm_package_version || '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      docs: '/api/docs'
+    }
+  });
 });
 
 app.use('/api/*', (req: Request, res: Response) => {

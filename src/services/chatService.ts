@@ -7,7 +7,7 @@ import { getEnvVar } from '../utils/env';
 
 class ChatService {
   private apiConfig: ApiConfig = {
-    endpoint: (getEnvVar('VITE_API_URL', 'http://localhost:3001') as string) + '/api/chat/dev',
+    endpoint: (getEnvVar('VITE_API_URL', 'https://your-backend-name.onrender.com') as string) + '/api/chat/dev',
     model: getEnvVar('VITE_OPENAI_MODEL', 'gpt-3.5-turbo') as string,
     temperature: 0.7,
     maxTokens: 1000,

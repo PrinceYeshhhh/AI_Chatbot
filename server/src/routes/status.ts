@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const vectorStats = await vectorService.getStats();
-    const cacheStats = cacheService.getStats();
+    const cacheStats = await cacheService.getStats();
     
     const systemStatus = {
       status: 'healthy',
@@ -31,7 +31,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     // Check if any critical services are down
     const criticalServices = [
       vectorStats.status === 'healthy',
-      cacheStats.status === 'healthy'
+      cacheStats && cacheStats.keys !== undefined // Check if cache is working
     ];
 
     if (criticalServices.some(status => !status)) {
@@ -85,9 +85,9 @@ router.get('/services/vector', async (req: Request, res: Response): Promise<void
   }
 });
 
-router.get('/services/cache', (req: Request, res: Response): void => {
+router.get('/services/cache', async (req: Request, res: Response): Promise<void> => {
   try {
-    const stats = cacheService.getStats();
+    const stats = await cacheService.getStats();
     successResponse(res, stats);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
