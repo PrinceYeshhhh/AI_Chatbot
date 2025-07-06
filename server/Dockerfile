@@ -14,7 +14,8 @@ RUN apk add --no-cache \
     pixman-dev \
     pangomm-dev \
     libjpeg-turbo-dev \
-    freetype-dev
+    freetype-dev \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
@@ -41,8 +42,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p uploads vector_store logs
+# Create necessary directories with proper permissions
+RUN mkdir -p uploads vector_store logs \
+    && chmod 755 uploads vector_store logs
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -54,12 +56,16 @@ RUN chown -R nodejs:nodejs /app
 # Switch to non-root user
 USER nodejs
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check with timeout
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Expose port
 EXPOSE 3001
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3001
 
 # Start the application
 CMD ["npm", "start"]
