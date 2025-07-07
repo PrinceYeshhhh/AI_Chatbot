@@ -2,6 +2,7 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { Chroma } from '@langchain/community/vectorstores/chroma';
 import { Document } from '@langchain/core/documents';
 import { logger } from '../utils/logger';
+import { supabase } from '../lib/supabase';
 
 interface VectorMetadata {
   [key: string]: unknown;
@@ -197,6 +198,44 @@ export class VectorService {
   // Method to check if service is available
   isServiceAvailable(): boolean {
     return this.isInitialized && this.vectorStore !== null;
+  }
+
+  // Query top-N vectors for a user, filtering by active files
+  async queryUserVectors({ userId, queryEmbedding, topK = 5 }: { userId: string, queryEmbedding: number[], topK?: number }) {
+    // 1. Get active file_ids for this user
+    const { data: files, error: fileError } = await supabase
+      .from('files')
+      .select('id, file_name')
+      .eq('user_id', userId);
+    if (fileError) throw new Error(fileError.message);
+    const fileIds = (files || []).map(f => f.id);
+    if (fileIds.length === 0) return [];
+    // 2. Query vectors table for topK most similar vectors for these files
+    // (Assume a Supabase RPC or do client-side cosine similarity)
+    // For now, fetch all vectors for user and files, then compute similarity
+    const { data: vectors, error: vectorError } = await supabase
+      .from('vectors')
+      .select('id, embedding, content, metadata, file_id, file_name, chunk_index')
+      .eq('user_id', userId)
+      .in('file_id', fileIds);
+    if (vectorError) throw new Error(vectorError.message);
+    if (!vectors || vectors.length === 0) return [];
+    // Compute cosine similarity
+    function cosineSim(a: number[], b: number[]): number {
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+      }
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+    const scored = vectors.map(v => ({
+      ...v,
+      score: cosineSim(queryEmbedding, v.embedding)
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK);
   }
 }
 

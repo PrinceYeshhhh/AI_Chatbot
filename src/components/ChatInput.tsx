@@ -3,7 +3,7 @@ import { Send, Mic, Paperclip, X } from 'lucide-react';
 import { chatService } from '../services/chatService';
 
 interface ChatInputProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, options?: { provider: string; model: string; temperature: number; strategy: string }) => void;
   disabled?: boolean;
   placeholder?: string;
   maxLength?: number;
@@ -25,6 +25,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  // Advanced LLM controls
+  const [provider, setProvider] = useState('openai');
+  const [model, setModel] = useState('gpt-4o');
+  const [temperature, setTemperature] = useState(0.7);
+  const [strategy, setStrategy] = useState('single-shot');
 
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   const ALLOWED_FILE_TYPES = ['.pdf', '.doc', '.docx', '.txt', '.jpg', '.png'];
@@ -58,7 +64,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (disabled || isProcessing) return;
     setIsProcessing(true);
     try {
-      await onSendMessage(trimmedMessage);
+      await onSendMessage(trimmedMessage, {
+        provider,
+        model,
+        temperature,
+        strategy
+      });
       setMessage('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -146,6 +157,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="border-t border-gray-200 bg-white p-4">
+      {/* Advanced LLM controls */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        <select value={provider} onChange={e => setProvider(e.target.value)} className="border rounded px-2 py-1">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="local">Local</option>
+        </select>
+        <select value={model} onChange={e => setModel(e.target.value)} className="border rounded px-2 py-1">
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="gpt-4">GPT-4</option>
+          <option value="claude-3">Claude 3</option>
+          <option value="llama-3">LLaMA 3</option>
+        </select>
+        <select value={strategy} onChange={e => setStrategy(e.target.value)} className="border rounded px-2 py-1">
+          <option value="single-shot">Single Shot</option>
+          <option value="chain-of-thought">Chain of Thought</option>
+          <option value="multi-agent">Multi-Agent</option>
+          <option value="reflexion">Reflexion</option>
+        </select>
+        <input
+          type="number"
+          min={0}
+          max={2}
+          step={0.1}
+          value={temperature}
+          onChange={e => setTemperature(Number(e.target.value))}
+          className="border rounded px-2 py-1 w-24"
+          placeholder="Temperature"
+        />
+      </div>
       {/* Attachment Panel */}
       {showAttachments && (
         <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">

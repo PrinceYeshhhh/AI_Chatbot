@@ -12,5 +12,8 @@
     "dist/**",
     "coverage/**"
   ],
-  "exec": "ts-node --transpile-only src/app.ts"
+  "exec": "ts-node src/index.ts",
+  "env": {
+    "NODE_ENV": "development"
+  }
 } 

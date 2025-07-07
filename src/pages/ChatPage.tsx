@@ -12,6 +12,7 @@ import { ChatTemplates } from '../components/ChatTemplates';
 import { VoiceInputButton } from '../components/VoiceInputButton';
 import { SaveChatButton } from '../components/SaveChatButton';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import SmartBrainStatus from '../components/SmartBrainStatus';
 
 const ChatPage: React.FC = () => {
   const {
@@ -95,7 +96,11 @@ const ChatPage: React.FC = () => {
           onOpenTraining={() => setIsTrainingOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onCloseSidebar={() => setIsSidebarOpen(false)}
-        />
+        >
+          <div className="p-4 border-t border-gray-200">
+            <SmartBrainStatus />
+          </div>
+        </Sidebar>
       </div>
 
       {/* Main Chat Area */}

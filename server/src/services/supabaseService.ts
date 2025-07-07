@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import fs from 'fs/promises';
+import { v4 as uuidv4 } from 'uuid';
+import { encoding_for_model } from 'tiktoken';
 
 // Chat History Functions
 export async function getChatHistory(userId: string): Promise<any[]> {
@@ -181,6 +183,17 @@ export async function deleteFile(fileId: string, userId: string): Promise<void> 
       throw new Error('Failed to fetch file metadata');
     }
 
+    // Delete from Supabase Storage if upload_path exists
+    if (data && data.upload_path) {
+      const { error: storageError } = await supabase.storage
+        .from('user-files')
+        .remove([data.upload_path]);
+      if (storageError) {
+        logger.error('Error deleting file from Supabase Storage:', storageError);
+        // Continue with DB deletion even if storage deletion fails
+      }
+    }
+
     // Delete from database
     const { error } = await supabase
       .from('files')
@@ -191,21 +204,6 @@ export async function deleteFile(fileId: string, userId: string): Promise<void> 
     if (error) {
       logger.error('Error deleting file from database:', error);
       throw new Error('Failed to delete file');
-    }
-
-    // Delete physical file from filesystem
-    if (data && data.upload_path) {
-      try {
-        await fs.unlink(data.upload_path);
-        logger.info(`Physical file deleted: ${data.upload_path}`);
-      } catch (fsError: any) {
-        if (fsError.code !== 'ENOENT') {
-          logger.error('Error deleting physical file:', fsError);
-          throw new Error('Failed to delete physical file');
-        } else {
-          logger.warn('Physical file not found, skipping deletion:', data.upload_path);
-        }
-      }
     }
 
     logger.info(`File ${fileId} deleted successfully`);
@@ -520,4 +518,95 @@ export async function getProcessingStatsFromDB(userId: string): Promise<any> {
     logger.error('Error in getProcessingStatsFromDB:', error);
     throw error;
   }
+}
+
+export async function deleteFileEmbeddings(fileId: string, userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('file_embeddings')
+      .delete()
+      .eq('file_id', fileId)
+      .eq('user_id', userId);
+    if (error) {
+      logger.error('Error deleting file embeddings:', error);
+      throw new Error('Failed to delete file embeddings');
+    }
+  } catch (error: any) {
+    logger.error('Error in deleteFileEmbeddings:', error);
+    throw error;
+  }
+}
+
+export async function saveFileEmbeddings(chunks: {
+  user_id: string;
+  file_id: string;
+  file_name: string;
+  chunk_text: string;
+  embedding_vector: number[];
+  chunk_index: number;
+}[]): Promise<void> {
+  try {
+    const rows = chunks.map(chunk => ({
+      id: uuidv4(),
+      user_id: chunk.user_id,
+      file_id: chunk.file_id,
+      file_name: chunk.file_name,
+      chunk_text: chunk.chunk_text,
+      embedding_vector: chunk.embedding_vector,
+      chunk_index: chunk.chunk_index,
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('file_embeddings').insert(rows);
+    if (error) {
+      logger.error('Error saving file embeddings:', error);
+      throw new Error('Failed to save file embeddings');
+    }
+  } catch (error: any) {
+    logger.error('Error in saveFileEmbeddings:', error);
+    throw error;
+  }
+}
+
+export function buildDynamicContext({
+  topChunks,
+  chatHistory,
+  userQuery,
+  model = 'gpt-4o',
+  maxTokens = 8000
+}: {
+  topChunks: Array<{ chunk_text: string; chunk_index: number; file_id: string; file_name: string }>;
+  chatHistory: Array<{ role: string; content: string }>;
+  userQuery: string;
+  model?: string;
+  maxTokens?: number;
+}): { prompt: string; tokenCount: number } {
+  const enc = encoding_for_model(model);
+  // Build context string for chunks
+  let chunkSection = topChunks.map((c, i) =>
+    `Chunk ${i + 1} (File: ${c.file_name}, Index: ${c.chunk_index}):\n${c.chunk_text}`
+  ).join("\n\n");
+  // Build conversation history (last 3-5 exchanges)
+  let historySection = chatHistory.slice(-5).map(h =>
+    `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`
+  ).join("\n");
+  // Build initial prompt
+  let prompt = `You are a helpful assistant answering questions based on the provided file content.\n\nContext:\n${chunkSection}\n\nConversation so far:\n${historySection}\n\nNow answer this:\n\"${userQuery}\"`;
+  let tokenCount = enc.encode(prompt).length;
+  // Trim memory/chunks if over maxTokens
+  let trimmedChunks = [...topChunks];
+  let trimmedHistory = chatHistory.slice(-5);
+  while (tokenCount > maxTokens && (trimmedChunks.length > 1 || trimmedHistory.length > 1)) {
+    if (trimmedChunks.length > 1) trimmedChunks.pop();
+    else if (trimmedHistory.length > 1) trimmedHistory.shift();
+    chunkSection = trimmedChunks.map((c, i) =>
+      `Chunk ${i + 1} (File: ${c.file_name}, Index: ${c.chunk_index}):\n${c.chunk_text}`
+    ).join("\n\n");
+    historySection = trimmedHistory.map(h =>
+      `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`
+    ).join("\n");
+    prompt = `You are a helpful assistant answering questions based on the provided file content.\n\nContext:\n${chunkSection}\n\nConversation so far:\n${historySection}\n\nNow answer this:\n\"${userQuery}\"`;
+    tokenCount = enc.encode(prompt).length;
+  }
+  enc.free();
+  return { prompt, tokenCount };
 } 

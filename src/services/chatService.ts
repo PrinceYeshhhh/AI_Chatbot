@@ -1,36 +1,56 @@
-import { Message, ApiConfig, TrainingData } from '../types';
-import { SecurityUtils } from '../utils/security';
+import { Message, TrainingData } from '../types';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
+import { SecurityUtils } from '../utils/security';
 import { cacheService } from './cacheService';
 import { errorTrackingService } from './errorTrackingService';
-import { getEnvVar } from '../utils/env';
+
+interface SmartBrainConfig {
+  endpoint: string;
+  timeout: number;
+  streaming: boolean;
+  sessionId?: string;
+  mode?: 'general' | 'document' | 'hybrid' | 'auto';
+}
+
+interface BrainResponse {
+  response: string;
+  context: {
+    retrievedDocuments: Array<{
+      content: string;
+      source: string;
+      relevance: number;
+      metadata: Record<string, any>;
+    }>;
+    reasoning: string;
+    confidence: number;
+    mode: 'general' | 'document' | 'hybrid';
+  };
+  metadata: {
+    processingTime: number;
+    tokensUsed: number;
+    modelUsed: string;
+    timestamp: Date;
+  };
+  sessionId: string;
+}
 
 class ChatService {
-  private apiConfig: ApiConfig = {
-    endpoint: (getEnvVar('VITE_API_URL', 'https://your-backend-name.onrender.com') as string) + '/api/chat/dev',
-    model: getEnvVar('VITE_OPENAI_MODEL', 'gpt-3.5-turbo') as string,
-    temperature: 0.7,
-    maxTokens: 1000,
+  private apiConfig: SmartBrainConfig = {
+    endpoint: process.env.VITE_API_URL || 'http://localhost:3001/api/chat',
     timeout: 30000,
-    retries: 3,
     streaming: true
   };
 
   private trainingData: TrainingData[] = [];
-  private rateLimiter = SecurityUtils.createRateLimiter(10, 60000); // 10 requests per minute
+  private sessionId: string | null = null;
 
   constructor() {
     this.loadApiConfig();
+    this.generateSessionId();
+  }
 
-    if (!getEnvVar('VITE_API_URL')) {
-      throw new Error('VITE_API_URL is not set. Please check your environment configuration.');
-    }
-    if (!getEnvVar('VITE_SUPABASE_URL')) {
-      throw new Error('VITE_SUPABASE_URL is not set. Please check your environment configuration.');
-    }
-    if (!getEnvVar('VITE_SUPABASE_ANON_KEY')) {
-      throw new Error('VITE_SUPABASE_ANON_KEY is not set. Please check your environment configuration.');
-    }
+  private generateSessionId(): void {
+    this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private loadApiConfig(): void {
@@ -55,13 +75,25 @@ class ChatService {
 
   async sendMessage(
     message: string, 
-    conversationHistory: Message[]
+    conversationHistory: Message[],
+    options?: {
+      mode?: 'general' | 'document' | 'hybrid' | 'auto';
+      fileFilter?: string[];
+      sessionId?: string;
+      provider?: string;
+      model?: string;
+      temperature?: number;
+      strategy?: string;
+    }
   ): Promise<Message> {
     const timer = PerformanceMonitor.startTimer('sendMessage');
     
     try {
       // Add breadcrumb for debugging
-      errorTrackingService.addBreadcrumb('chat', 'Sending message', { messageLength: message.length });
+      errorTrackingService.addBreadcrumb('chat', 'Sending message', { 
+        messageLength: message.length,
+        mode: options?.mode || 'auto'
+      });
 
       // Check cache first for similar messages
       const cacheKey = `message_response_${SecurityUtils.hashString(message)}`;
@@ -88,8 +120,25 @@ class ChatService {
         conversationHistory.push(userMessage);
       }
 
-      // Make actual API call to backend
-      const botMessage = await this.makeApiRequest(message, conversationHistory);
+      // Make API call to Smart Brain backend
+      const brainResponse = await this.makeSmartBrainRequest(message, conversationHistory, options);
+
+      // Create bot message from Smart Brain response
+      const botMessage: Message = {
+        id: SecurityUtils.generateSecureId(),
+        content: brainResponse.response,
+        sender: 'bot',
+        timestamp: new Date(),
+        status: 'sent',
+        intent: brainResponse.context.mode,
+        metadata: {
+          brainResponse: brainResponse,
+          confidence: brainResponse.context.confidence,
+          documentsUsed: brainResponse.context.retrievedDocuments.length,
+          processingTime: brainResponse.metadata.processingTime,
+          modelUsed: brainResponse.metadata.modelUsed
+        }
+      };
 
       // Add bot message to conversation
       if (conversationHistory) {
@@ -99,27 +148,41 @@ class ChatService {
       // Cache the response
       await cacheService.set('chat', cacheKey, botMessage, {
         intent: botMessage.intent,
-        entities: (botMessage.metadata?.entities as any[])?.length || 0,
+        confidence: brainResponse.context.confidence,
+        documentsUsed: brainResponse.context.retrievedDocuments.length,
         timestamp: new Date().toISOString()
       });
 
       timer();
       return botMessage;
 
-    } catch (error) {
+    } catch (error: unknown) {
       timer();
-      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), { 
-        component: 'chatService', 
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), {
+        component: 'chatService',
         severity: 'high',
-        tags: ['send-message'],
-        metadata: { messageLength: message.length }
+        tags: ['smart-brain', 'message-processing']
       });
-      
-      throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      // Fallback to local processing
+      console.warn('Smart Brain unavailable, using fallback response');
+      return this.processMessageLocally(message, conversationHistory);
     }
   }
 
-  private async makeApiRequest(message: string, conversationHistory: Message[]): Promise<Message> {
+  private async makeSmartBrainRequest(
+    message: string, 
+    conversationHistory: Message[],
+    options?: {
+      mode?: 'general' | 'document' | 'hybrid' | 'auto';
+      fileFilter?: string[];
+      sessionId?: string;
+      provider?: string;
+      model?: string;
+      temperature?: number;
+      strategy?: string;
+    }
+  ): Promise<BrainResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.apiConfig.timeout || 30000);
 
@@ -132,6 +195,60 @@ class ChatService {
         body: JSON.stringify({
           message,
           conversationHistory: conversationHistory.slice(-10), // Send last 10 messages for context
+          sessionId: options?.sessionId || this.sessionId,
+          mode: options?.mode || 'auto',
+          fileFilter: options?.fileFilter,
+          useContext: true,
+          provider: options?.provider,
+          model: options?.model,
+          temperature: options?.temperature,
+          strategy: options?.strategy
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Smart Brain API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data as BrainResponse;
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  // Streaming version for real-time responses
+  async sendMessageStreaming(
+    message: string,
+    conversationHistory: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete: (fullResponse: string) => void,
+    options?: {
+      mode?: 'general' | 'document' | 'hybrid' | 'auto';
+      fileFilter?: string[];
+      sessionId?: string;
+    }
+  ): Promise<void> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.apiConfig.timeout || 30000);
+
+    try {
+      const response = await fetch(`${this.apiConfig.endpoint}/smart`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          conversationHistory: conversationHistory.slice(-10),
+          sessionId: options?.sessionId || this.sessionId,
+          mode: options?.mode || 'auto',
+          fileFilter: options?.fileFilter,
           useContext: true
         }),
         signal: controller.signal
@@ -140,7 +257,7 @@ class ChatService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`API request failed with status: ${response.status}`);
+        throw new Error(`Smart Brain streaming request failed with status: ${response.status}`);
       }
 
       const reader = response.body?.getReader();
@@ -164,20 +281,17 @@ class ChatService {
             const data = line.slice(6);
             if (data === '[DONE]') {
               reader.releaseLock();
-              return {
-                id: SecurityUtils.generateSecureId(),
-                content: fullResponse || 'I apologize, but I encountered an issue processing your request.',
-                sender: 'bot',
-                timestamp: new Date(),
-                status: 'sent',
-                intent: 'streaming_response'
-              };
+              onComplete(fullResponse);
+              return;
             }
             
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === 'chunk') {
-                fullResponse += parsed.content;
+              if (parsed.type === 'response') {
+                fullResponse = parsed.content;
+                onChunk(parsed.content);
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.error || 'Streaming error');
               }
             } catch (e) {
               // Ignore parsing errors for incomplete chunks
@@ -186,16 +300,14 @@ class ChatService {
         }
       }
 
-      return {
-        id: SecurityUtils.generateSecureId(),
-        content: fullResponse || 'I apologize, but I encountered an issue processing your request.',
-        sender: 'bot',
-        timestamp: new Date(),
-        status: 'sent',
-        intent: 'streaming_response'
-      };
+      onComplete(fullResponse);
     } catch (error) {
       clearTimeout(timeoutId);
+      errorTrackingService.trackError(error instanceof Error ? error : new Error(String(error)), {
+        component: 'chatService',
+        severity: 'medium',
+        tags: ['smart-brain', 'streaming']
+      });
       throw error;
     }
   }
@@ -206,9 +318,9 @@ class ChatService {
 
     // Simple local fallback responses
     const responses = [
-      "I'm currently running in offline mode. For full AI capabilities, please ensure the backend server is running on port 3001.",
-      "Backend service is not available. I can provide basic responses, but for advanced AI features, please start the server.",
-      "I'm operating with limited functionality. To access the full AI assistant with document processing and vector search, please run 'npm run dev:backend'.",
+      "I'm currently running in offline mode. For full Smart Brain capabilities, please ensure the backend server is running on port 3001.",
+      "Smart Brain service is not available. I can provide basic responses, but for advanced AI features with document learning, please start the server.",
+      "I'm operating with limited functionality. To access the full Smart Brain with instant document learning and RAG capabilities, please run 'npm run dev:backend'.",
     ];
 
     const response = responses[Math.floor(Math.random() * responses.length)];
@@ -221,6 +333,54 @@ class ChatService {
       status: 'sent',
       intent: 'fallback_response'
     };
+  }
+
+  // Get Smart Brain status
+  async getBrainStatus(): Promise<any> {
+    try {
+      const response = await fetch(`${this.apiConfig.endpoint}/brain-status`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get brain status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get brain status:', error);
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Get session statistics
+  async getSessionStats(sessionId?: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.apiConfig.endpoint}/history?sessionId=${sessionId || this.sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get session stats: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get session stats:', error);
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   // Training methods with Web Worker integration
@@ -393,173 +553,70 @@ class ChatService {
     }
   }
 
-  async removeTrainingData(id: string): Promise<void> {
+  getTrainingData(): TrainingData[] {
+    return [...this.trainingData];
+  }
+
+  async deleteTrainingData(id: string): Promise<void> {
     try {
-      // Remove from backend
-      const response = await fetch(`${this.apiConfig.endpoint.replace('/chat', '/training')}/${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`http://localhost:3001/api/training/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        this.trainingData = this.trainingData.filter(data => data.id !== id);
+      }
+    } catch (error) {
+      console.error('Failed to delete training data:', error);
+      throw error;
+    }
+  }
+
+  async exportTrainingData(): Promise<string> {
+    try {
+      const response = await fetch('http://localhost:3001/api/training/export', {
+        method: 'GET',
       });
 
       if (!response.ok) {
-        console.warn(`Failed to remove training data from backend: ${response.status}`);
+        throw new Error(`Failed to export training data: ${response.status}`);
       }
 
-      // Remove from local array
-      this.trainingData = this.trainingData.filter(item => item.id !== id);
+      const data = await response.json();
+      return JSON.stringify(data, null, 2);
     } catch (error) {
-      console.warn('Failed to remove training data:', error);
-      // Still remove from local array
-      this.trainingData = this.trainingData.filter(item => item.id !== id);
+      console.error('Failed to export training data:', error);
+      throw error;
     }
   }
 
-  getTrainingData(): TrainingData[] {
-    return [...this.trainingData]; // Return copy to prevent external modification
-  }
-
-  importTrainingData(data: TrainingData[]): void {
-    // Validate imported data
-    for (const item of data) {
-      const validation = SecurityUtils.validateTrainingData(item.input, item.expectedOutput, item.intent);
-      if (!validation.isValid) {
-        throw new Error(`Invalid training data: ${validation.error}`);
-      }
-    }
-    
-    this.trainingData.push(...data);
-  }
-
-  async exportTrainingData(): Promise<TrainingData[]> {
-    try {
-      const response = await fetch(`${this.apiConfig.endpoint.replace('/chat', '/training')}/export`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        return data.trainingData || this.trainingData;
-      }
-    } catch (error) {
-      console.warn('Failed to export from backend, using local data:', error);
-    }
-    
-    return this.trainingData;
-  }
-
-  updateApiConfig(config: Partial<ApiConfig>): void {
-    // Validate API key if provided
-    if (config.apiKey && !SecurityUtils.validateApiKey(config.apiKey)) {
-      throw new Error('Invalid API key format');
-    }
-
+  // Configuration methods
+  updateApiConfig(config: Partial<SmartBrainConfig>): void {
     this.apiConfig = { ...this.apiConfig, ...config };
     this.saveApiConfig();
   }
 
-  getApiConfig(): ApiConfig {
-    return { ...this.apiConfig }; // Return copy to prevent external modification
+  getApiConfig(): SmartBrainConfig {
+    return { ...this.apiConfig };
   }
 
-  async getTrainingStats() {
-    try {
-      const response = await fetch(`${this.apiConfig.endpoint.replace('/chat', '/training')}/stats`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to get training stats: ${response.status}`);
-      }
+  // Session management
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
 
-      const stats = await response.json();
-      
-      return {
-        total: stats.training?.totalExamples || this.trainingData.length,
-        validated: Math.floor((stats.training?.totalExamples || this.trainingData.length) * 0.8),
-        pending: Math.floor((stats.training?.totalExamples || this.trainingData.length) * 0.15),
-        rejected: Math.floor((stats.training?.totalExamples || this.trainingData.length) * 0.05),
-        validationRate: 80
-      };
-    } catch (error) {
-      console.warn('Failed to get training stats from backend, using local data:', error);
-      
-      // Fallback to local data
-      return {
-        total: this.trainingData.length,
-        validated: Math.floor(this.trainingData.length * 0.8),
-        pending: Math.floor(this.trainingData.length * 0.15),
-        rejected: Math.floor(this.trainingData.length * 0.05),
-        validationRate: 80
-      };
-    }
+  setSessionId(sessionId: string): void {
+    this.sessionId = sessionId;
+  }
+
+  generateNewSession(): void {
+    this.generateSessionId();
   }
 
   private getUserId(): string {
     // Simple user identification - in a real app, this would come from auth
     return localStorage.getItem('chatbot-user-id') || 'anonymous';
   }
-
-  // Performance monitoring
-  getPerformanceStats() {
-    return PerformanceMonitor.getPerformanceSummary();
-  }
-
-  // Security utilities
-  validateApiKey(key: string): boolean {
-    return SecurityUtils.validateApiKey(key);
-  }
-
-  maskApiKey(key: string): string {
-    return SecurityUtils.maskApiKey(key);
-  }
-
-  /**
-   * Upload one or more files to the backend and handle errors uniformly, with progress and 207 support
-   */
-  async uploadFiles(files: File[], onProgress?: (percent: number) => void): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const url = `${getEnvVar('VITE_API_URL', 'http://localhost:3001') as string}/api/upload`;
-      xhr.open('POST', url);
-
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && onProgress) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          onProgress(percent);
-        }
-      };
-
-      xhr.onload = () => {
-        try {
-          const result = JSON.parse(xhr.responseText);
-          if (xhr.status === 207) {
-            resolve(result);
-          } else if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(result);
-          } else {
-            reject(new Error(result.error || `Upload failed: ${xhr.status}`));
-          }
-        } catch (e) {
-          reject(new Error('Failed to parse upload response.'));
-        }
-      };
-
-      xhr.onerror = () => {
-        reject(new Error('Network error: Unable to reach the server. Please check your connection.'));
-      };
-
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append('files', file);
-      }
-      xhr.send(formData);
-    });
-  }
 }
 
-// Export singleton instance with lazy initialization
-let chatServiceInstance: ChatService | null = null;
-
-export const chatService = new Proxy({} as ChatService, {
-  get(target, prop) {
-    if (!chatServiceInstance) {
-      chatServiceInstance = new ChatService();
-    }
-    return chatServiceInstance[prop as keyof ChatService];
-  }
-});
+export const chatService = new ChatService();

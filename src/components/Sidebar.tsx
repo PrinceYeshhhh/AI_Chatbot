@@ -12,6 +12,7 @@ interface SidebarProps {
   onOpenTraining: () => void;
   onOpenSettings: () => void;
   onCloseSidebar?: () => void;
+  children?: React.ReactNode;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -22,7 +23,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteConversation,
   onOpenTraining,
   onOpenSettings,
-  onCloseSidebar
+  onCloseSidebar,
+  children
 }) => {
   const handleNewConversation = () => {
     onNewConversation();
@@ -102,6 +104,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           Settings
         </button>
       </div>
+      
+      {/* Children */}
+      {children}
     </div>
   );
 };

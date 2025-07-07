@@ -104,7 +104,7 @@ cp .env.example .env
 cp server/.env.example server/.env
 
 # Add your OpenAI API key to server/.env
-OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_API_KEY=sk-your-openai-api-key
 ```
 
 ### 3. Start Development
@@ -460,3 +460,300 @@ See the example files for the full list and descriptions.
 - In Render, go to the "Alerts" section of your service.
 - Enable alerts for downtime, failed deploys, and high error rates.
 - Optionally, set up email or Slack notifications for critical events.
+
+# Smart Brain AI Chatbot
+
+A full-stack AI chatbot with instant file learning capabilities using RAG (Retrieval-Augmented Generation), GPT-4, embeddings, and vector databases.
+
+## 🚀 Features
+
+- **Instant File Learning**: Upload documents and chat with AI that learns from them instantly
+- **RAG Technology**: Advanced retrieval-augmented generation for accurate responses
+- **Supabase Authentication**: Secure user authentication and session management
+- **Real-time Chat**: Stream responses from AI with typing indicators
+- **Document Processing**: Support for PDF, DOCX, TXT, and more
+- **Vector Database**: Efficient document storage and retrieval
+- **Modern UI**: Beautiful, responsive interface with dark/light themes
+
+## 🏗️ Architecture
+
+```
+Smart Brain AI Chatbot
+├── Frontend (React + Vite + TypeScript)
+│   ├── Authentication (Supabase)
+│   ├── Chat Interface
+│   ├── File Upload
+│   └── Real-time Updates
+├── Backend (Node.js + Express + TypeScript)
+│   ├── Smart Brain Service
+│   ├── Document Processing
+│   ├── Vector Database Integration
+│   └── OpenAI Integration
+└── Database (Supabase)
+    ├── User Authentication
+    ├── Document Storage
+    └── Vector Embeddings
+```
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for fast development
+- **Tailwind CSS** for styling
+- **Supabase JS Client** for authentication
+- **React Router** for navigation
+- **Lucide React** for icons
+
+### Backend
+- **Node.js** with Express
+- **TypeScript** for type safety
+- **Supabase** for authentication & database
+- **OpenAI API** for AI capabilities
+- **Vector Database** for document storage
+- **JWT** for secure authentication
+
+## 📦 Installation
+
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+- Supabase account
+- OpenAI API key
+
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd AI_Chatbot_2/project
+```
+
+### 2. Install Dependencies
+```bash
+# Install root dependencies
+npm install
+
+# Install client dependencies
+cd client
+npm install
+
+# Install server dependencies
+cd ../server
+npm install
+```
+
+### 3. Environment Setup
+
+#### Frontend (.env)
+```bash
+cd client
+cp env.example .env
+```
+
+Edit `.env`:
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_URL=http://localhost:3001
+```
+
+#### Backend (.env)
+```bash
+cd server
+cp env.example .env
+```
+
+Edit `.env`:
+```env
+PORT=3001
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173
+
+# Supabase Configuration
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
+```
+
+### 4. Supabase Setup
+
+1. Create a new Supabase project
+2. Enable Email authentication in Auth settings
+3. Copy your project URL and keys to environment files
+4. Set up your database tables (will be done in future constraints)
+
+### 5. Start Development Servers
+
+#### Option 1: Individual Servers
+```bash
+# Start backend (from server directory)
+cd server
+npm run dev
+
+# Start frontend (from client directory)
+cd client
+npm run dev
+```
+
+#### Option 2: Concurrent (from root)
+```bash
+# From project root
+npm run dev
+```
+
+## 🔐 Authentication
+
+The app uses Supabase for secure authentication:
+
+- **Sign Up**: Email/password registration
+- **Sign In**: Email/password login
+- **Session Management**: Automatic token refresh
+- **Protected Routes**: JWT validation on backend
+- **User Context**: Global auth state management
+
+### Authentication Flow
+1. User signs up/logs in via Supabase
+2. Frontend stores session token
+3. Backend validates JWT tokens
+4. Protected routes require authentication
+5. Session persists across page reloads
+
+## 🚀 Development
+
+### Available Scripts
+
+#### Root (Project Level)
+```bash
+npm run dev          # Start both client and server
+npm run build        # Build both client and server
+npm run test         # Run tests for both
+npm run lint         # Lint both client and server
+```
+
+#### Client
+```bash
+npm run dev          # Start Vite dev server
+npm run build        # Build for production
+npm run preview      # Preview production build
+npm run test         # Run tests
+npm run lint         # Lint code
+```
+
+#### Server
+```bash
+npm run dev          # Start with nodemon
+npm run build        # Build TypeScript
+npm run start        # Start production server
+npm run test         # Run tests
+npm run lint         # Lint code
+```
+
+### Project Structure
+```
+project/
+├── client/                 # Frontend React app
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── context/       # React context (Auth)
+│   │   ├── lib/          # Utilities (Supabase)
+│   │   ├── pages/        # Page components
+│   │   └── services/     # API services
+│   └── public/           # Static assets
+├── server/               # Backend Express app
+│   ├── src/
+│   │   ├── middleware/   # Express middleware
+│   │   ├── routes/       # API routes
+│   │   ├── services/     # Business logic
+│   │   └── utils/        # Utilities
+│   └── uploads/          # File uploads
+└── docs/                # Documentation
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+#### Frontend (.env)
+- `VITE_SUPABASE_URL`: Your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+- `VITE_API_URL`: Backend API URL
+
+#### Backend (.env)
+- `PORT`: Server port (default: 3001)
+- `NODE_ENV`: Environment (development/production)
+- `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
+- `OPENAI_API_KEY`: OpenAI API key
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm run test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+## 📚 API Documentation
+
+### Authentication Endpoints
+- `GET /api/auth/me` - Get current user info
+- `GET /api/auth/verify` - Verify token validity
+- `GET /api/auth/health` - Auth service health check
+
+### Health Check
+- `GET /api/health` - Server health status
+
+## 🔒 Security Features
+
+- **JWT Authentication**: Secure token-based auth
+- **CORS Protection**: Configured for production
+- **Helmet Security**: HTTP headers protection
+- **Input Validation**: Request validation middleware
+- **Rate Limiting**: API rate limiting (future)
+- **File Upload Security**: Secure file handling
+
+## 🚀 Deployment
+
+### Frontend (Vercel/Netlify)
+```bash
+cd client
+npm run build
+# Deploy dist/ folder
+```
+
+### Backend (Railway/Render)
+```bash
+cd server
+npm run build
+npm start
+```
+
+## 📝 License
+
+MIT License - see LICENSE file for details
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## 📞 Support
+
+For support and questions:
+- Create an issue in the repository
+- Check the documentation
+- Review the code examples
+
+---
+
+**Smart Brain AI Chatbot** - Powered by RAG, GPT-4, and Vector Databases
