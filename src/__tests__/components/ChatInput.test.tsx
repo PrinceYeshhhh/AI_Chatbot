@@ -98,4 +98,20 @@ describe('ChatInput', () => {
     textarea.focus();
     expect(textarea).toHaveFocus();
   });
+
+  it('shows mic button and handles voice input UI', async () => {
+    render(<ChatInput onSendMessage={onSendMessage} />);
+    const micBtn = screen.getByRole('button', { name: /mic: start voice input/i });
+    expect(micBtn).toBeInTheDocument();
+    fireEvent.click(micBtn);
+    // Simulate Web Speech API not supported
+    // Should show fallback error
+    await waitFor(() => expect(screen.getByText(/not supported|fallback/i)).toBeInTheDocument());
+  });
+
+  it('shows language selection for voice input', () => {
+    render(<ChatInput onSendMessage={onSendMessage} />);
+    fireEvent.click(screen.getByRole('button', { name: /mic: start voice input/i }));
+    expect(screen.getByRole('combobox', { name: /voice input language/i })).toBeInTheDocument();
+  });
 }); 

@@ -7,8 +7,9 @@ This guide will help you set up a complete CI/CD pipeline for your AI Chatbot pr
 - GitHub repository with your project
 - Vercel account (for frontend deployment)
 - Render account (for backend deployment)
-- Supabase project configured
-- OpenAI API key
+- Clerk.dev account configured
+- Groq API key
+- Together.ai API key
 
 ## 🔧 GitHub Secrets Configuration
 
@@ -71,13 +72,17 @@ Set these in your Vercel project dashboard (`Settings → Environment Variables`
 ```bash
 VITE_API_BASE_URL=https://your-backend-name.onrender.com
 VITE_API_URL=https://your-backend-name.onrender.com
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
-VITE_OPENAI_MODEL=gpt-3.5-turbo
-VITE_OPENAI_MAX_TOKENS=1000
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+VITE_CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+VITE_CLOUDINARY_UPLOAD_PRESET=your_upload_preset
+VITE_UMAMI_WEBSITE_ID=your_umami_website_id
+VITE_UMAMI_SCRIPT_URL=https://your-umami-instance.com/umami.js
 VITE_ENABLE_ANALYTICS=true
 VITE_ENABLE_ERROR_TRACKING=true
 VITE_ENABLE_PERFORMANCE_MONITORING=true
+VITE_ENABLE_STREAMING=true
+VITE_ENABLE_CACHING=true
 VITE_DEV_MODE=false
 VITE_DEBUG_MODE=false
 ```
@@ -92,28 +97,54 @@ NODE_ENV=production
 PORT=3001
 CORS_ORIGIN=https://your-frontend-name.vercel.app
 ALLOWED_ORIGINS=https://your-frontend-name.vercel.app
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-3.5-turbo
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
-SUPABASE_ANON_KEY=your_supabase_anon_key_here
-JWT_SECRET=your_jwt_secret_here
+FRONTEND_URL=https://your-frontend-name.vercel.app
+API_BASE_URL=https://your-backend-name.onrender.com
 LOG_LEVEL=info
+
+# Authentication (Clerk.dev)
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+
+# Database (Neon.tech)
+NEON_DATABASE_URL=postgresql://username:password@host:port/database
+NEON_HOST=your-neon-host.neon.tech
+NEON_DATABASE=your_database_name
+NEON_USERNAME=your_username
+NEON_PASSWORD=your_password
+
+# Vector Database (Qdrant Cloud)
+QDRANT_URL=https://your-cluster-id.us-east-1-0.aws.cloud.qdrant.io:6333
+QDRANT_API_KEY=your_qdrant_api_key
+QDRANT_COLLECTION=smart_brain_embeddings
+
+# File Storage (Cloudinary)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# AI/ML Services
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama3-70b-8192
+TOGETHER_API_KEY=your_together_api_key
+TOGETHER_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-base
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# Analytics (Umami)
+UMAMI_WEBSITE_ID=your_umami_website_id
+UMAMI_URL=https://your-umami-instance.com
+UMAMI_API_KEY=your_umami_api_key
+
+# Security & Performance
+JWT_SECRET=your_jwt_secret_key_here_make_it_long_and_random
+ENCRYPTION_KEY=your_32_byte_encryption_key_here_make_it_random
 ENABLE_HELMET=true
 ENABLE_COMPRESSION=true
 ENABLE_REQUEST_LOGGING=true
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 SLOW_DOWN_DELAY_MS=500
-OPENAI_TEMPERATURE=0.7
-OPENAI_MAX_TOKENS=1000
-PROMPT_TEMPLATE=You are a helpful assistant. Answer concisely and clearly.
-CHROMA_COLLECTION_NAME=chatbot_embeddings
 VECTOR_SIMILARITY_THRESHOLD=0.7
 MAX_RETRIEVAL_RESULTS=5
-FRONTEND_URL=https://your-frontend-name.vercel.app
-API_BASE_URL=https://your-backend-name.onrender.com
 VERBOSE_LOGGING=false
 UPLOAD_DIR=uploads
 MAX_FILE_SIZE=10485760

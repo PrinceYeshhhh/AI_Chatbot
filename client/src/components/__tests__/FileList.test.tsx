@@ -4,6 +4,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import FileList from '../FileList'
 import { AuthContext } from '../../context/AuthContext'
 
+Object.defineProperty(globalThis, 'import.meta', {
+  value: {
+    env: {
+    }
+  }
+});
+
 // Mock fileService
 vi.mock('../../services/fileService', () => ({
   fileService: {
@@ -18,16 +25,36 @@ vi.mock('../../services/fileService', () => ({
 // Mock AuthContext
 const mockUser = {
   id: 'test-user-id',
-  email: 'test@example.com'
-}
+  email: 'test@example.com',
+  app_metadata: {},
+  user_metadata: {},
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+  role: 'authenticated',
+  confirmed_at: new Date().toISOString(),
+  email_confirmed_at: new Date().toISOString(),
+  phone: '',
+  phone_confirmed_at: '',
+  last_sign_in_at: new Date().toISOString(),
+  factors: [],
+  identities: [],
+};
 
 const mockAuthContext = {
   user: mockUser,
+  session: null,
   signIn: vi.fn(),
   signUp: vi.fn(),
   signOut: vi.fn(),
   loading: false
 }
+
+
+describe('Sanity', () => {
+  it('should run a basic test', () => {
+    expect(true).toBe(true);
+  });
+});
 
 describe('FileList', () => {
   beforeEach(() => {

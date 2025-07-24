@@ -1,45 +1,58 @@
-import { createClient } from '@supabase/supabase-js';
+import { NeonDatabaseService } from './neonDatabaseService';
 
-const supabaseUrl = process.env['SUPABASE_URL'];
-const supabaseServiceKey = process.env['SUPABASE_SERVICE_KEY'] || process.env['SUPABASE_SECRET_KEY'];
+const dbService = new NeonDatabaseService();
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables.');
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-export async function saveChatToHistory({ userId, queryText, matchedChunks, aiResponse }: {
+export async function saveChatToHistory({ userId, encryptedQuery, encryptedResponse, matchedChunks, model, memoryUsed, timeTakenMs }: {
   userId: string;
-  queryText: string;
+  encryptedQuery: any;
+  encryptedResponse: any;
   matchedChunks: any[];
-  aiResponse: string;
+  model?: string;
+  memoryUsed?: any;
+  timeTakenMs?: number;
 }) {
-  const { error } = await supabase.from('chat_history').insert([
-    {
-      user_id: userId,
-      query_text: queryText,
-      matched_chunks: matchedChunks,
-      ai_response: aiResponse,
-    },
-  ]);
-  if (error) throw new Error('Failed to save chat history: ' + error.message);
+  try {
+    const query = `
+      INSERT INTO chat_history (user_id, encrypted_query, encrypted_response, matched_chunks, model, memory_used, time_taken_ms, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+      RETURNING *;
+    `;
+    
+    await dbService.query(query, [
+      userId,
+      JSON.stringify(encryptedQuery),
+      JSON.stringify(encryptedResponse),
+      JSON.stringify(matchedChunks),
+      model || null,
+      JSON.stringify(memoryUsed),
+      timeTakenMs || null
+    ]);
+  } catch (error) {
+    throw new Error('Failed to save chat history: ' + error);
+  }
 }
 
-export async function getChatHistoryForUser(userId: string) {
-  const { data, error } = await supabase
-    .from('chat_history')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-  if (error) throw new Error('Failed to fetch chat history: ' + error.message);
-  return data;
+export async function getChatHistoryForUser(userId: string): Promise<any[]> {
+  try {
+    const query = `
+      SELECT * FROM chat_history 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 50;
+    `;
+    
+    const result = await dbService.query(query, [userId]);
+    return result.rows;
+  } catch (error) {
+    throw new Error('Failed to fetch chat history: ' + error);
+  }
 }
 
-export async function clearChatHistoryForUser(userId: string) {
-  const { error } = await supabase
-    .from('chat_history')
-    .delete()
-    .eq('user_id', userId);
-  if (error) throw new Error('Failed to clear chat history: ' + error.message);
+export async function clearChatHistoryForUser(userId: string): Promise<void> {
+  try {
+    const query = 'DELETE FROM chat_history WHERE user_id = $1';
+    await dbService.query(query, [userId]);
+  } catch (error) {
+    throw new Error('Failed to clear chat history: ' + error);
+  }
 } 

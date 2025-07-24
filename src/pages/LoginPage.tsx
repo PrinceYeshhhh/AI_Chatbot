@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { supabase } from '../services/supabaseClient';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,14 +14,11 @@ const LoginPage: React.FC = () => {
     setError(null);
     if (!email.trim() || !password.trim()) return;
     setLoading(true);
-    // Supabase sign in
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    // Clerk sign in (placeholder)
+    // TODO: Implement Clerk sign in logic here
     setLoading(false);
-    if (signInError) {
-      setError(signInError.message);
+    if (error) {
+      setError(error.message);
       return;
     }
     navigate('/chat');

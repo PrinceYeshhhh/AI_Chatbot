@@ -18,19 +18,19 @@ services:
         value: production
       - key: PORT
         value: 3001
-      - key: OPENAI_API_KEY
+      - key: GROQ_API_KEY
         sync: false # Marked as secret, set in Render dashboard
-      - key: OPENAI_MODEL
-        value: gpt-3.5-turbo
-      - key: OPENAI_EMBEDDING_MODEL
-        value: text-embedding-ada-002
+      - key: GROQ_MODEL
+        value: llama3-70b-8192
+      - key: TOGETHER_API_KEY
+        sync: false # Marked as secret, set in Render dashboard
       - key: LOG_LEVEL
         value: info
       - key: CORS_ORIGIN
         value: https://your-frontend-name.vercel.app
-      - key: SUPABASE_URL
-        value: '' # Set in Render dashboard
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: CLERK_SECRET_KEY
+        sync: false # Marked as secret, set in Render dashboard
+      - key: NEON_DATABASE_URL
         sync: false # Marked as secret, set in Render dashboard
       # Optional/secure backend env vars
       - key: REDIS_URL

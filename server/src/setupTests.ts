@@ -2,12 +2,22 @@
 import '@testing-library/jest-dom';
 
 // Mock environment variables
-process.env.NODE_ENV = 'test';
-process.env.PORT = '3001';
-process.env.SUPABASE_URL = 'https://test.supabase.co';
-process.env.SUPABASE_ANON_KEY = 'test-anon-key';
-process.env.OPENAI_API_KEY = 'test-openai-key';
-process.env.JWT_SECRET = 'test-jwt-secret';
+process.env['NODE_ENV'] = 'test';
+process.env['PORT'] = '3001';
+process.env['GROQ_API_KEY'] = 'test-groq-key';
+process.env['TOGETHER_API_KEY'] = 'test-together-key';
+process.env['QDRANT_URL'] = 'https://test.qdrant.io';
+process.env['QDRANT_API_KEY'] = 'test-qdrant-key';
+process.env['CLERK_SECRET_KEY'] = 'test-clerk-key';
+process.env['NEON_HOST'] = 'test.neon.tech';
+process.env['NEON_DATABASE'] = 'test_db';
+process.env['NEON_USER'] = 'test_user';
+process.env['NEON_PASSWORD'] = 'test_password';
+process.env['CLOUDINARY_CLOUD_NAME'] = 'test-cloud';
+process.env['CLOUDINARY_API_KEY'] = 'test-cloudinary-key';
+process.env['CLOUDINARY_API_SECRET'] = 'test-cloudinary-secret';
+process.env['JWT_SECRET'] = 'test-jwt-secret';
+process.env['ENCRYPTION_KEY'] = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 // Mock console methods to reduce noise in tests
 global.console = {
@@ -44,6 +54,23 @@ jest.mock('./utils/logger', () => ({
   },
   wrapAsync: jest.fn((fn) => fn),
 }));
+
+// Mock localStorage for frontend tests
+(global as any).localStorage = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+// Mock document for frontend tests
+(global as any).document = {
+  createElement: jest.fn(),
+  getElementById: jest.fn(),
+  querySelector: jest.fn(),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  body: {},
+};
 
 // Global test timeout
 jest.setTimeout(10000);

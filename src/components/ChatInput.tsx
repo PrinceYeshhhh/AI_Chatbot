@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip, X } from 'lucide-react';
+import debounce from 'lodash.debounce';
+import { Send, Mic, Paperclip, X, Pause, Play } from 'lucide-react';
 import { chatService } from '../services/chatService';
 
 interface ChatInputProps {
@@ -27,13 +28,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   // Advanced LLM controls
-  const [provider, setProvider] = useState('openai');
+  const [provider, setProvider] = useState('groq');
   const [model, setModel] = useState('gpt-4o');
   const [temperature, setTemperature] = useState(0.7);
   const [strategy, setStrategy] = useState('single-shot');
 
+  // --- Voice Input (Speech-to-Text) ---
+  const [transcription, setTranscription] = useState('');
+  const [recordingLang, setRecordingLang] = useState('en');
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-  const ALLOWED_FILE_TYPES = ['.pdf', '.doc', '.docx', '.txt', '.jpg', '.png'];
+  const ALLOWED_FILE_TYPES = [
+    // Documents
+    '.pdf', '.docx', '.txt', '.csv', '.xls', '.xlsx',
+    // Images
+    '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif',
+    // Audio
+    '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.webm'
+  ];
+
+  // Debounced message setter
+  const debouncedSetMessage = useRef(debounce((val: string) => setMessage(val), 200)).current;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    debouncedSetMessage(e.target.value);
+  };
 
   // Auto-resize textarea
   useEffect(() => {
@@ -151,16 +173,121 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const startRecording = () => {
+    setRecordingError(null);
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = recordingLang;
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            setTranscription(prev => prev + event.results[i][0].transcript);
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        setTranscription(prev => prev.split(' [interim]')[0] + (interim ? ' [interim]' + interim : ''));
+      };
+      recognition.onerror = (event: any) => {
+        setRecordingError(event.error || 'Speech recognition error');
+        setIsRecording(false);
+      };
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsRecording(true);
+      setIsPaused(false);
+    } else {
+      // Fallback: whisper.js (not implemented here, placeholder)
+      setRecordingError('Web Speech API not supported. Whisper.js fallback not implemented.');
+    }
+  };
+  const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+    setIsPaused(false);
+  };
+  const pauseRecording = () => {
+    if (recognitionRef.current && recognitionRef.current.stop) {
+      recognitionRef.current.stop();
+      setIsPaused(true);
+    }
+  };
+  const resumeRecording = () => {
+    if (!isPaused) return;
+    startRecording();
+  };
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+  const handleTranscriptionSend = () => {
+    setMessage(transcription.replace(/ \[interim\].*$/, ''));
+    setTranscription('');
+    setIsRecording(false);
+  };
+  // --- Language selection for Whisper ---
+  const LANG_OPTIONS = [
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Español' },
+    { value: 'fr', label: 'Français' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'hi', label: 'हिन्दी' },
+    // ... add more as needed
+  ];
+
   const characterCount = message.length;
   const isOverLimit = characterCount > maxLength;
   const remainingChars = maxLength - characterCount;
 
   return (
     <div className="border-t border-gray-200 bg-white p-4">
+      {/* Voice Input Controls */}
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          type="button"
+          className={`p-2 rounded-full ${isRecording ? 'bg-red-100' : 'bg-gray-100'} hover:bg-blue-100`}
+          onClick={handleMicClick}
+          aria-label={isRecording ? 'Mic: Stop voice input' : 'Mic: Start voice input'}
+        >
+          <Mic className={`w-5 h-5 ${isRecording ? 'text-red-500 animate-pulse' : 'text-gray-700'}`} />
+        </button>
+        {isRecording && (
+          <>
+            <button type="button" className="p-2" onClick={pauseRecording} aria-label="Pause recording"><Pause /></button>
+            <button type="button" className="p-2" onClick={resumeRecording} aria-label="Resume recording"><Play /></button>
+            <select value={recordingLang} onChange={e => setRecordingLang(e.target.value)} className="border rounded px-2 py-1 ml-2" aria-label="Voice input language">
+              {LANG_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </>
+        )}
+        {transcription && (
+          <div className="ml-2 flex-1">
+            <span className="text-gray-700">{transcription}</span>
+            <button type="button" className="ml-2 px-2 py-1 bg-blue-500 text-white rounded" onClick={handleTranscriptionSend}>Send</button>
+          </div>
+        )}
+        {recordingError && <span className="text-red-500 ml-2">{recordingError}</span>}
+      </div>
       {/* Advanced LLM controls */}
       <div className="flex flex-wrap gap-2 mb-3">
         <select value={provider} onChange={e => setProvider(e.target.value)} className="border rounded px-2 py-1">
-          <option value="openai">OpenAI</option>
+          <option value="groq">Groq</option>
+          <option value="together">Together.ai</option>
           <option value="anthropic">Anthropic</option>
           <option value="local">Local</option>
         </select>
@@ -260,9 +387,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-            }}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled || isProcessing}

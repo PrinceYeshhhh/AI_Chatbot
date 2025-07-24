@@ -1,104 +1,47 @@
-# AI Chatbot Setup Instructions
+# Setup Instructions
 
-## Current Status ✅
-- **Frontend**: Working (React + TypeScript)
-- **Backend**: Working (Node.js + Express)
-- **Integration**: Complete between frontend and backend
-- **File Upload**: Working
-- **Training Data**: Working
-- **Vector Store**: Working (in-memory with fallback)
+## 1. Add Your API Keys
+To enable full AI/ML/NLP features, add your API keys for Groq, Together.ai, Clerk, Qdrant, Neon, and Firebase.
 
-## What You Need to Do
-
-### 1. Add Your OpenAI API Key (Optional but Recommended)
-To enable full AI/ML/NLP features, add your OpenAI API key:
-
-1. Go to https://platform.openai.com/account/api-keys
-2. Create a new API key
-3. Edit `project/server/.env` file
-4. Replace `your_openai_api_key_here` with your actual API key:
-   ```
-   OPENAI_API_KEY=sk-your-actual-api-key-here
-   ```
-
-### 2. Start the Application
-
-#### Option A: Start Both Frontend and Backend Together
-```bash
-cd project
-npm run dev
+### Example .env
 ```
-This will start:
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3001
-
-#### Option B: Start Separately
-```bash
-# Terminal 1 - Frontend
-cd project
-npm run dev:frontend
-
-# Terminal 2 - Backend  
-cd project/server
-npm run dev
+GROQ_API_KEY=your_groq_api_key
+TOGETHER_API_KEY=your_together_api_key
+QDRANT_URL=your_qdrant_url
+QDRANT_API_KEY=your_qdrant_api_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+NEON_HOST=your_neon_host
+NEON_DATABASE=your_database_name
+NEON_USER=your_username
+NEON_PASSWORD=your_password
+FIREBASE_API_KEY=your_firebase_api_key
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
+UMAMI_WEBSITE_ID=your_website_id
+UMAMI_API_KEY=your_api_key
 ```
 
-### 3. Test the Application
+## 2. Install Dependencies
+Run `npm install` in both the backend and frontend directories.
 
-1. **Open your browser** to http://localhost:5173
-2. **You should see** the intro animation, then the chat interface
-3. **Test features**:
-   - Send a chat message
-   - Upload a file (PDF, TXT, CSV, etc.)
-   - Open Training Modal (brain icon)
-   - Add training examples
-   - Export training data
+## 3. Start the Application
+- Backend: `npm run dev` in `project/server`
+- Frontend: `npm run dev` in `project/client`
 
-## What Works Without OpenAI API Key
+## What Works Without All API Keys
+- Basic UI and static features
+- Some local LLM features (if configured)
 
-✅ **All UI features** (chat interface, file upload, training modal)
-✅ **File upload and processing** (PDF, TXT, CSV, JSON, DOCX)
-✅ **Training data management** (add, delete, export)
-✅ **Vector store** (simple text matching fallback)
-✅ **All backend endpoints** (status, health checks)
-
-## What Requires OpenAI API Key
-
-❌ **AI chat responses** (will show "AI service unavailable" message)
-❌ **Advanced vector embeddings** (uses simple text matching instead)
-❌ **Context-aware responses** (limited functionality)
+## What Requires All API Keys
+- Chat completions (Groq)
+- Embeddings (Together.ai)
+- Vector search (Qdrant)
+- Authentication (Clerk)
+- File storage (Firebase)
+- Analytics (Umami)
 
 ## Troubleshooting
-
-### If Backend Won't Start
-- Check that Node.js version is 18+ (`node --version`)
-- Make sure all dependencies are installed (`npm install` in both project and project/server)
-- Check the logs for specific error messages
-
-### If Frontend Shows Errors
-- Make sure backend is running on port 3001
-- Check browser console for specific error messages
-- Try refreshing the page
-
-### If File Upload Doesn't Work
-- Check that the `uploads` directory exists in `project/server/`
-- Make sure backend is running and accessible
-
-## Next Steps
-
-Once you have the basic application running:
-
-1. **Add your OpenAI API key** for full AI functionality
-2. **Test all features** thoroughly
-3. **Customize the UI** as needed
-4. **Deploy to production** when ready
-
-## Support
-
-If you encounter any issues:
-1. Check the browser console for frontend errors
-2. Check the terminal for backend errors
-3. Verify all environment variables are set correctly
-4. Ensure all dependencies are installed
-
-The application is now **fully functional** and ready for use! 🚀 
+- Ensure all API keys are set in your environment
+- Check service dashboards for usage/errors
+- For further help, see the documentation or open an issue 

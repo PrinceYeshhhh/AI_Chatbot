@@ -29,4 +29,15 @@ describe('ChatMessage', () => {
     msg.focus();
     expect(msg).toHaveFocus();
   });
+
+  it('shows speaker button for bot message and handles TTS', () => {
+    render(<ChatMessage message={{ id: '5', content: 'Speak this', sender: 'bot', timestamp: new Date(), lang: 'en' }} isLastMessage={false} />);
+    const speakerBtn = screen.getByRole('button', { name: /read message aloud/i });
+    expect(speakerBtn).toBeInTheDocument();
+  });
+
+  it('shows translation tooltip if translated', () => {
+    render(<ChatMessage message={{ id: '6', content: 'Hola', sender: 'bot', timestamp: new Date(), translatedFrom: 'es' }} isLastMessage={false} />);
+    expect(screen.getByText(/translated from es/i)).toBeInTheDocument();
+  });
 }); 

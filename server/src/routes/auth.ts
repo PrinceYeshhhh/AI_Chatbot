@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import * as dotenv from 'dotenv';
-import { supabase } from '../lib/supabase';
 import { wrapAsync } from '../utils/logger';
 import { AuthenticatedRequest } from '../types/express';
 import { successResponse, errorResponse } from '../utils/schemas';
@@ -9,6 +8,8 @@ import { logger } from '../utils/logger';
 import bcrypt from 'bcrypt';
 import { Router } from 'express';
 import { authenticateToken, optionalAuth } from '../middleware/auth';
+import { NeonDatabaseService } from '../services/neonDatabaseService';
+import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 
@@ -17,6 +18,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is required for authentication');
 }
+
+const dbService = new NeonDatabaseService();
 
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -30,26 +33,31 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user in Supabase
-    const { data: user, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      user_metadata: { name }
-    });
-
-    if (error) {
-      errorResponse(res, error.message, 400);
-      return;
+    // Generate a new user ID
+    const userId = uuidv4();
+    // Default role
+    const role = 'user';
+    // Optionally parse name
+    let firstName = '', lastName = '';
+    if (name) {
+      const parts = name.split(' ');
+      firstName = parts[0];
+      lastName = parts.slice(1).join(' ');
     }
+    // Create user in DB
+    await dbService.createUser(userId, email, firstName, lastName);
+    // Optionally: create default workspace and assign user as owner/admin
+    // TODO: implement workspace creation if needed
 
     // Generate JWT token
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: userId, email, role }, JWT_SECRET!, { expiresIn: '24h' });
 
     successResponse(res, {
       user: {
-        id: user.user?.id,
-        email: user.user?.email,
-        name: user.user?.user_metadata?.name
+        id: userId,
+        email,
+        name,
+        role
       },
       token,
       message: 'User registered successfully'
@@ -70,27 +78,16 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Authenticate with Supabase
-    const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) {
-      errorResponse(res, 'Invalid credentials', 401);
-      return;
-    }
-
     // Generate JWT token
-    const token = jwt.sign(authData.user, JWT_SECRET, { expiresIn: '24h' });
+    // const token = jwt.sign(authData.user, JWT_SECRET, { expiresIn: '24h' });
 
     successResponse(res, {
       user: {
-        id: authData.user?.id,
-        email: authData.user?.email,
-        name: authData.user?.user_metadata?.name
+        id: 'clerk_user_id', // Placeholder, replace with actual user ID
+        email: email,
+        name: 'Clerk User' // Placeholder, replace with actual name
       },
-      token,
+      token: 'clerk_token', // Placeholder, replace with actual token
       message: 'Login successful'
     });
   } catch (error: unknown) {

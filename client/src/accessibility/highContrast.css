@@ -1,0 +1,9 @@
+body.high-contrast {
+  background: #000 !important;
+  color: #fff !important;
+}
+body.high-contrast button, body.high-contrast input, body.high-contrast select {
+  background: #222 !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+} 

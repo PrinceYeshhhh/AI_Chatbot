@@ -13,7 +13,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           ui: ['lucide-react', 'framer-motion'],
-          utils: ['@supabase/supabase-js', 'zod'],
+          utils: ['@clerk/clerk-react', 'zod'],
           services: ['dompurify', 'xss']
         }
       }

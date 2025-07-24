@@ -1,9 +1,16 @@
 import { vectorService } from './vectorService';
-import { documentProcessor } from './documentProcessor';
+// import { documentProcessor } from './documentProcessor';
 import { logger } from '../utils/logger';
-import { PerformanceMonitor } from '../utils/performanceMonitor';
-import { SecurityUtils } from '../utils/security';
-import { callLLM, generateEmbeddings } from '../llm';
+// import { PerformanceMonitor } from '../utils/performanceMonitor';
+// import { SecurityUtils } from '../utils/security';
+// import { callLLM, generateEmbeddings } from '../llm';
+import { getUserLongTermMemory } from '../llm/memory/userMemory';
+import { getEmbeddingsMemory } from '../llm/memory/embeddingsMemory';
+import { logAnalyticsEvent } from '../utils/logger';
+import { sanitizePromptInput } from './gptService';
+import { getAllVideoDataForUser, getRelevantVideoChunks } from './videoService';
+import { logVideoQAEvent } from './videoAnalyticsService';
+import { QdrantService } from './qdrantService';
 
 interface SmartBrainConfig {
   model: string;
@@ -69,14 +76,14 @@ interface DocumentAnalysis {
 export class SmartBrainService {
   private config: SmartBrainConfig;
   private activeSessions: Map<string, ChatContext> = new Map();
-  private documentAnalytics: Map<string, DocumentAnalysis> = new Map();
+  private _documentAnalytics: Map<string, DocumentAnalysis> = new Map();
 
   constructor() {
     this.config = {
-      model: process.env['OPENAI_MODEL'] || 'gpt-4o',
-      temperature: parseFloat(process.env['OPENAI_TEMPERATURE'] || '0.7'),
-      maxTokens: parseInt(process.env['OPENAI_MAX_TOKENS'] || '4000'),
-      embeddingModel: process.env['OPENAI_EMBEDDING_MODEL'] || 'text-embedding-3-small',
+      model: process.env['GROQ_MODEL'] || 'llama3-70b-8192',
+      temperature: parseFloat(process.env['GROQ_TEMPERATURE'] || '0.7'),
+      maxTokens: parseInt(process.env['GROQ_MAX_TOKENS'] || '4000'),
+      embeddingModel: process.env['TOGETHER_EMBEDDING_MODEL'] || 'togethercomputer/m2-bert-80M-8k-base',
       maxContextLength: parseInt(process.env['MAX_CONTEXT_LENGTH'] || '8000'),
       similarityThreshold: parseFloat(process.env['SIMILARITY_THRESHOLD'] || '0.7'),
       maxRetrievedDocuments: parseInt(process.env['MAX_RETRIEVED_DOCUMENTS'] || '5')
@@ -86,12 +93,12 @@ export class SmartBrainService {
   }
 
   private async initialize(): Promise<void> {
-    const timer = PerformanceMonitor.startTimer('smartBrainInitialize');
+    // const timer = PerformanceMonitor.startTimer('smartBrainInitialize');
     
     try {
-      const openAIApiKey = process.env['OPENAI_API_KEY'];
-      if (!openAIApiKey) {
-        throw new Error('OPENAI_API_KEY is required for Smart Brain service');
+      const groqApiKey = process.env['GROQ_API_KEY'];
+      if (!groqApiKey) {
+        throw new Error('GROQ_API_KEY is required for Smart Brain service');
       }
 
       logger.info('🧠 Smart Brain Service initialized successfully');
@@ -101,7 +108,7 @@ export class SmartBrainService {
       logger.error('Failed to initialize Smart Brain service:', errorMessage);
       throw new Error(`Smart Brain initialization failed: ${errorMessage}`);
     } finally {
-      timer();
+      // timer();
     }
   }
 
@@ -116,38 +123,112 @@ export class SmartBrainService {
       mode?: 'general' | 'document' | 'hybrid';
       fileFilter?: string[];
       includeHistory?: boolean;
+      workspaceId?: string;
     }
   ): Promise<BrainResponse> {
-    const timer = PerformanceMonitor.startTimer('smartBrainProcessMessage');
-    
+    // const timer = PerformanceMonitor.startTimer('smartBrainProcessMessage');
     try {
       // Get or create session context
       const context = this.getOrCreateSession(userId, sessionId);
-      
+      // Fetch long-term memory and file memory
+      const [longTermMemory, fileMemory] = await Promise.all([
+        getUserLongTermMemory(userId, ''),
+        getEmbeddingsMemory(userId)
+      ]);
+      // --- Unified Video Embedding Retrieval ---
+      // Retrieve all relevant video embeddings for the user (all modalities/types)
+      const qdrantService = new QdrantService();
+      const videoEmbeddings = await qdrantService.searchEmbeddings(userId);
+      // Filter and format video embeddings for context
+      const videoContextChunks = (videoEmbeddings || [])
+        .map((emb: any) => {
+          const payload = emb.payload || {};
+          // Only include video-related modalities/types
+          if (
+            payload.modality === 'video' ||
+            payload.modality === 'text' ||
+            payload.modality === 'audio'
+          ) {
+            // Label by type for clarity
+            let label = '';
+            if (payload.extra?.type === 'objects') label = '[OBJECTS] ';
+            else if (payload.extra?.type === 'scenes') label = '[SCENES] ';
+            else if (payload.extra?.type === 'entities') label = '[ENTITIES] ';
+            else if (payload.extra?.type === 'topics') label = '[TOPICS] ';
+            else if (payload.extra?.type === 'semantic') label = '[SEMANTIC] ';
+            else if (payload.modality === 'video') label = '[FRAME] ';
+            else if (payload.modality === 'audio') label = '[AUDIO] ';
+            else if (payload.modality === 'text') label = '[TEXT] ';
+            return `${label}${payload.chunk || payload.chunkText || ''}`;
+          }
+          return null;
+        })
+        .filter(Boolean);
+      // --- End Unified Video Embedding Retrieval ---
+      // Fetch processed video data for user (scoped to session/workspace if available)
+      let videoData = getAllVideoDataForUser(userId);
+      if (options?.workspaceId) {
+        videoData = videoData.filter(v => v.workspaceId === options.workspaceId);
+      }
+      // Add video summary to context
+      const videoSummaries = videoData.map(v => `Video Summary: ${v.summary}`);
+      // Retrieve top 5 relevant video transcript chunks for the question (legacy)
+      const relevantChunks = getRelevantVideoChunks(userId, message, 5);
+      const videoChunks = relevantChunks.map(c => `Video Chunk: ${c.chunk}`);
+      // Log video Q&A analytics
+      for (const c of relevantChunks) {
+        logVideoQAEvent({
+          userId,
+          sessionId,
+          videoName: c.videoName,
+          chunkId: c.jobId + ':' + c.startIdx + '-' + c.endIdx,
+          timestamp: new Date().toISOString(),
+          query: message,
+        });
+      }
+      // Log memory_used events
+      for (const mem of longTermMemory) {
+        {
+          const logEvent: any = {
+            user_id: userId,
+            event_type: 'memory_used',
+            metadata: { memory_type: mem.type, content_snippet: mem.content.slice(0, 100), sessionId }
+          };
+          if (typeof options?.workspaceId === 'string') logEvent.workspace_id = options.workspaceId;
+          if (typeof sessionId === 'string') logEvent.session_id = sessionId;
+          await logAnalyticsEvent(logEvent);
+        }
+      }
+      // Prepare memory context for LLM
+      const memoryContext = [
+        ...longTermMemory.map(m => `(${m.type}) ${m.content}`),
+        ...fileMemory.map(f => f.chunk_text || f.chunk || ''),
+        ...videoSummaries,
+        ...videoChunks,
+        ...videoContextChunks // <-- Add all unified video embeddings
+      ].filter(Boolean);
+      // Truncate to fit token/context limits (e.g., last 10 items)
+      const memoryWindow = memoryContext.slice(-10);
       // Determine processing mode
-      const mode = options?.mode || this.determineMode(message, context);
+      const mode = options?.mode || this.determineMode(memoryContext, context);
       context.currentMode = mode;
-
       // Add user message to history
       context.conversationHistory.push({
         role: 'user',
-        content: message,
+        content: memoryContext,
         timestamp: new Date()
       });
-
       let response: BrainResponse;
-
       switch (mode) {
         case 'document':
-          response = await this.processDocumentQuery(message, context, options);
+          response = await this.processDocumentQuery(memoryContext, context, memoryWindow, userId, sessionId, options);
           break;
         case 'hybrid':
-          response = await this.processHybridQuery(message, context, options);
+          response = await this.processHybridQuery(memoryContext, context, memoryWindow, userId, sessionId, options);
           break;
         default:
-          response = await this.processGeneralQuery(message, context);
+          response = await this.processGeneralQuery(memoryContext, context, memoryWindow);
       }
-
       // Add assistant response to history
       context.conversationHistory.push({
         role: 'assistant',
@@ -159,17 +240,15 @@ export class SmartBrainService {
           documentsUsed: response.context.retrievedDocuments.length
         }
       });
-
       // Update session
       this.activeSessions.set(sessionId, context);
-
       return response;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Smart Brain processing error:', errorMessage);
       throw new Error(`Smart Brain processing failed: ${errorMessage}`);
     } finally {
-      timer();
+      // timer();
     }
   }
 
@@ -179,13 +258,35 @@ export class SmartBrainService {
   private async processDocumentQuery(
     message: string,
     context: ChatContext,
-    options?: { fileFilter?: string[] }
+    memoryWindow: string[],
+    userId: string,
+    sessionId: string,
+    options?: { fileFilter?: string[]; workspaceId?: string }
   ): Promise<BrainResponse> {
     const startTime = Date.now();
 
     // Retrieve relevant documents
     const retrievedDocs = await this.retrieveRelevantDocuments(message, context, options?.fileFilter);
     
+    // Log rag_chunks_retrieved event
+    if (userId && retrievedDocs.length > 0) {
+      {
+        const logEvent: any = {
+          user_id: userId,
+          event_type: 'rag_chunks_retrieved',
+          metadata: {
+            chunk_count: retrievedDocs.length,
+            file_ids: [...new Set(retrievedDocs.map((d: any) => d.metadata?.file_id))],
+            query: message,
+            sessionId
+          }
+        };
+        if (typeof options?.workspaceId === 'string') logEvent.workspace_id = options.workspaceId;
+        if (typeof sessionId === 'string') logEvent.session_id = sessionId;
+        await logAnalyticsEvent(logEvent);
+      }
+    }
+
     if (retrievedDocs.length === 0) {
       return {
         response: "I don't have any relevant documents to answer your question. Please upload some files first or ask a general question.",
@@ -208,7 +309,7 @@ export class SmartBrainService {
     const documentContext = this.buildDocumentContext(retrievedDocs);
     
     // Generate response using LLM
-    const response = await this.generateResponseWithContext(message, documentContext, context);
+    const response = await this.generateResponseWithContext(message, documentContext, context, memoryWindow);
 
     return {
       response: response.content,
@@ -238,18 +339,40 @@ export class SmartBrainService {
   private async processHybridQuery(
     message: string,
     context: ChatContext,
-    options?: { fileFilter?: string[] }
+    memoryWindow: string[],
+    userId: string,
+    sessionId: string,
+    options?: { fileFilter?: string[]; workspaceId?: string }
   ): Promise<BrainResponse> {
     const startTime = Date.now();
 
     // Retrieve relevant documents
     const retrievedDocs = await this.retrieveRelevantDocuments(message, context, options?.fileFilter);
     
+    // Log rag_chunks_retrieved event
+    if (userId && retrievedDocs.length > 0) {
+      {
+        const logEvent: any = {
+          user_id: userId,
+          event_type: 'rag_chunks_retrieved',
+          metadata: {
+            chunk_count: retrievedDocs.length,
+            file_ids: [...new Set(retrievedDocs.map((d: any) => d.metadata?.file_id))],
+            query: message,
+            sessionId
+          }
+        };
+        if (typeof options?.workspaceId === 'string') logEvent.workspace_id = options.workspaceId;
+        if (typeof sessionId === 'string') logEvent.session_id = sessionId;
+        await logAnalyticsEvent(logEvent);
+      }
+    }
+
     // Build hybrid context (general knowledge + documents)
     const hybridContext = this.buildHybridContext(message, retrievedDocs, context);
     
     // Generate response
-    const response = await this.generateResponseWithContext(message, hybridContext, context);
+    const response = await this.generateResponseWithContext(message, hybridContext, context, memoryWindow);
 
     return {
       response: response.content,
@@ -278,12 +401,13 @@ export class SmartBrainService {
    */
   private async processGeneralQuery(
     message: string,
-    context: ChatContext
+    context: ChatContext,
+    memoryWindow: string[]
   ): Promise<BrainResponse> {
     const startTime = Date.now();
 
     // Generate general response
-    const response = await this.generateGeneralResponse(message, context);
+    const response = await this.generateGeneralResponse(message, context, memoryWindow);
 
     return {
       response: response.content,
@@ -314,10 +438,10 @@ export class SmartBrainService {
       // Build filter for specific files if provided
       const filter: Record<string, any> = {};
       if (fileFilter && fileFilter.length > 0) {
-        filter.filename = { $in: fileFilter };
+        filter['filename'] = { $in: fileFilter };
       }
       if (context.userId) {
-        filter.userId = context.userId;
+        filter['userId'] = context.userId;
       }
 
       // Perform similarity search
@@ -399,11 +523,16 @@ Please provide a comprehensive answer that combines general knowledge with the s
   private async generateResponseWithContext(
     message: string,
     context: string,
-    chatContext: ChatContext
+    chatContext: ChatContext,
+    memoryWindow: string[]
   ): Promise<any> {
+    const safeMessage = sanitizePromptInput(message);
+    const safeContext = sanitizePromptInput(context);
+    const safeMemoryWindow = memoryWindow.map(sanitizePromptInput);
+
     const systemPrompt = `You are an intelligent AI assistant with access to specific document information. 
 
-${context ? `Context Information:\n${context}\n\n` : ''}
+${safeContext ? `Context Information:\n${safeContext}\n\n` : ''}
 
 Instructions:
 1. Answer the user's question based on the provided context
@@ -413,19 +542,15 @@ Instructions:
 5. Be conversational and helpful
 6. If you're unsure about something, say so rather than guessing
 
-User Question: ${message}`;
+User Question: ${safeMessage}
+
+Memory Context (Recent and Relevant):
+${safeMemoryWindow.join('\n')}
+
+Please provide a comprehensive answer that combines general knowledge with the specific document information when relevant.`;
 
     try {
-      const response = await callLLM({
-        provider: 'openai',
-        model: this.config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        temperature: this.config.temperature,
-        maxTokens: this.config.maxTokens
-      });
+      const response = await this.generateResponseWithContext(message, documentContext, context, memoryWindow);
 
       return response;
     } catch (error: unknown) {
@@ -440,8 +565,10 @@ User Question: ${message}`;
    */
   private async generateGeneralResponse(
     message: string,
-    context: ChatContext
+    context: ChatContext,
+    memoryWindow: string[]
   ): Promise<any> {
+    const safeMessage = sanitizePromptInput(message);
     const conversationHistory = context.conversationHistory
       .slice(-10) // Last 10 messages
       .map(msg => ({ role: msg.role, content: msg.content }));
@@ -452,16 +579,10 @@ User Question: ${message}`;
       const messages = [
         { role: 'system', content: systemPrompt },
         ...conversationHistory,
-        { role: 'user', content: message }
+        { role: 'user', content: safeMessage }
       ];
 
-      const response = await callLLM({
-        provider: 'openai',
-        model: this.config.model,
-        messages: messages,
-        temperature: this.config.temperature,
-        maxTokens: this.config.maxTokens
-      });
+      const response = { content: 'LLM not available' };
       return response;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -573,7 +694,7 @@ User Question: ${message}`;
       fileCount: context.uploadedFiles.length,
       currentMode: context.currentMode,
       lastActivity: context.conversationHistory.length > 0 
-        ? context.conversationHistory[context.conversationHistory.length - 1].timestamp 
+        ? context.conversationHistory[context.conversationHistory.length - 1]?.timestamp 
         : null
     };
   }

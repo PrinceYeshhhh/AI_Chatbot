@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase'
 import { api } from './api'
 import { useState } from 'react'
 
@@ -14,6 +13,9 @@ export interface FileMetadata {
   processed_at?: string
   created_at: string
   metadata?: any
+  // New fields for multi-modal support
+  content_text?: string
+  processing_metadata?: any
 }
 
 export interface UploadResponse {
@@ -28,14 +30,13 @@ class FileService {
    */
   async getUploadedFiles(): Promise<FileMetadata[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await api.get('/files')
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
-        .from('file_uploads')
-        .select('*')
+      const { data, error } = await api
+        .get('/files')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -68,9 +69,7 @@ class FileService {
    */
   async getFileDownloadUrl(filePath: string): Promise<string> {
     try {
-      const { data } = supabase.storage
-        .from('user-files')
-        .getPublicUrl(filePath)
+      const { data } = api.get(`/files/download/${filePath}`)
 
       return data.publicUrl
     } catch (error) {
@@ -88,7 +87,7 @@ class FileService {
     processedAt?: string
   ): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await api.get('/files')
       if (!user) {
         throw new Error('User not authenticated')
       }
@@ -101,10 +100,8 @@ class FileService {
         updateData.processed_at = processedAt
       }
 
-      const { error } = await supabase
-        .from('file_uploads')
-        .update(updateData)
-        .eq('id', fileId)
+      const { error } = await api
+        .update(`/files/${fileId}`)
         .eq('user_id', user.id)
 
       if (error) {
@@ -160,11 +157,19 @@ class FileService {
    * Get file icon based on type
    */
   getFileIcon(type: string): string {
+    // Documents
     if (type.includes('pdf')) return '📄'
     if (type.includes('word') || type.includes('document')) return '📝'
     if (type.includes('excel') || type.includes('spreadsheet')) return '📊'
     if (type.includes('csv')) return '📋'
     if (type.includes('text')) return '📄'
+    
+    // Images
+    if (type.includes('image')) return '🖼️'
+    
+    // Audio
+    if (type.includes('audio')) return '🎵'
+    
     return '📁'
   }
 
@@ -185,6 +190,130 @@ class FileService {
       return res.data
     } catch (error) {
       throw error
+    }
+  }
+
+  /**
+   * Get paginated uploaded files for the current user, with chunk count
+   */
+  async getUploadedFilesPaginated(page = 1, pageSize = 10): Promise<{ files: FileMetadata[]; total: number }> {
+    try {
+      const { data: { user } } = await api.get('/files');
+      if (!user) throw new Error('User not authenticated');
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error, count } = await api
+        .get('/files/paginated')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (error) throw error;
+      // Attach chunk count
+      const files = (data || []).map((f: any) => ({ ...f, chunk_count: f.file_chunks?.[0]?.count || 0 }));
+      return { files, total: count || 0 };
+    } catch (error) {
+      console.error('Error fetching paginated files:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all chunks for a file (for chunk explorer)
+   */
+  async getFileChunks(fileId: string): Promise<any[]> {
+    try {
+      const { data: { user } } = await api.get('/files');
+      if (!user) throw new Error('User not authenticated');
+      const { data, error } = await api
+        .get(`/files/chunks/${fileId}`)
+        .eq('user_id', user.id)
+        .order('chunk_index', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching file chunks:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get files by type (document, image, audio)
+   */
+  async getFilesByType(fileType?: string): Promise<FileMetadata[]> {
+    try {
+      const { data: { user } } = await api.get('/files');
+      if (!user) throw new Error('User not authenticated');
+
+      let query = api
+        .get('/files')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (fileType) {
+        query = query.eq('file_type', fileType);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching files by type:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update file content text (for extracted text/transcript)
+   */
+  async updateFileContent(fileId: string, contentText: string, processingMetadata?: any): Promise<void> {
+    try {
+      const { data: { user } } = await api.get('/files');
+      if (!user) throw new Error('User not authenticated');
+
+      const updateData: any = {
+        content_text: contentText
+      };
+
+      if (processingMetadata) {
+        updateData.processing_metadata = processingMetadata;
+      }
+
+      const { error } = await api
+        .update(`/files/${fileId}`)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating file content:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get file statistics by type
+   */
+  async getFileStatsByType(): Promise<Record<string, { count: number; totalSize: number }>> {
+    try {
+      const { data: { user } } = await api.get('/files');
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await api
+        .get('/files/stats/type');
+
+      if (error) throw error;
+
+      const stats: Record<string, { count: number; totalSize: number }> = {};
+      (data || []).forEach((row: any) => {
+        stats[row.file_type] = {
+          count: parseInt(row.count),
+          totalSize: parseInt(row.total_size)
+        };
+      });
+
+      return stats;
+    } catch (error) {
+      console.error('Error getting file stats by type:', error);
+      throw error;
     }
   }
 }

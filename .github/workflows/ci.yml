@@ -94,3 +94,45 @@ jobs:
         run: |
           cd project/server
           if [ -f "Dockerfile" ]; then docker build . --file Dockerfile --tag backend-image:ci; else echo "No backend Dockerfile"; fi 
+
+      # --- Python Microservice Setup ---
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          cd project/server
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || pip install fastapi uvicorn pdfplumber pytesseract pillow easyocr openai-whisper pandas
+
+      - name: Start Python microservice
+        run: |
+          cd project/server
+          nohup python nlp_microservice.py &
+          sleep 10
+
+      # --- Start Backend/Frontend (if needed for E2E) ---
+      - name: Start backend
+        run: |
+          cd project/server
+          nohup npm run start &
+          sleep 10
+
+      - name: Start frontend
+        run: |
+          cd project
+          nohup npm run dev &
+          sleep 10
+
+      # --- Playwright E2E Tests ---
+      - name: Install Playwright
+        run: |
+          cd project/server
+          npx playwright install --with-deps
+
+      - name: Run Playwright E2E tests
+        run: |
+          cd project/server
+          npx playwright test scripts/playwright-e2e.spec.ts || exit 1 

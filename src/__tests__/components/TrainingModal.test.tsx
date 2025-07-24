@@ -43,8 +43,8 @@ describe('TrainingModal', () => {
   const mockOnClose = jest.fn();
 
   beforeAll(() => {
-    process.env.VITE_SUPABASE_URL = 'http://localhost:54321';
-    process.env.VITE_SUPABASE_ANON_KEY = 'test-key';
+    process.env.VITE_CLERK_PUBLISHABLE_KEY = 'pk_test_test_key';
+    process.env.VITE_CLERK_SECRET_KEY = 'sk_test_test_key';
     global.URL.createObjectURL = jest.fn(() => 'mock-url');
   });
 

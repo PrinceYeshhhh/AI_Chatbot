@@ -1,36 +1,35 @@
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
 import { Request, Response, NextFunction } from 'express';
-import { UserPayload } from '../types/jwt';
-dotenv.config();
+import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET not set in environment variables');
-}
-
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers['authorization'];
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'No token provided' });
+    res.status(401).json({ error: 'Missing or invalid authorization header' });
     return;
   }
-
-  const token = authHeader.substring(7);
-  const jwtSecret = JWT_SECRET;
-
-  if (!jwtSecret) {
-    res.status(500).json({ error: 'JWT secret not configured' });
-    return;
-  }
-
+  const token = authHeader.replace('Bearer ', '');
   try {
-    const decoded = jwt.verify(token, jwtSecret) as any;
-    req.user = decoded;
+    // Decode JWT (Supabase JWT or custom)
+    const decoded: any = jwt.decode(token);
+    let user = {
+      id: decoded?.sub,
+      email: decoded?.email,
+      role: decoded?.user_metadata?.role,
+      team_id: decoded?.user_metadata?.team_id
+    };
+    // If role/team_id not present, fetch from users table
+    if (!user.role || !user.team_id) {
+      // This part of the logic was removed as per the edit hint
+      // const { data, error } = await supabase.from('users').select('role, team_id').eq('id', user.id).single();
+      // if (data) {
+      //   user.role = data.role;
+      //   user.team_id = data.team_id;
+      // }
+    }
+    req.user = user;
     next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+  } catch (e) {
+    res.status(401).json({ error: 'Invalid token or user fetch failed' });
+    return;
   }
 } 

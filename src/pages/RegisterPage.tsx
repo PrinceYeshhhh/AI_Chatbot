@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { supabase, insertProfile } from '../services/supabaseClient';
 
 const RegisterPage: React.FC = () => {
   const [form, setForm] = useState({
@@ -31,33 +30,18 @@ const RegisterPage: React.FC = () => {
       return;
     }
     setLoading(true);
-    // Supabase sign up
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        data: {
-          name: form.name,
-          mobile: form.mobile,
-          username: form.username
-        }
-      }
-    });
-    if (signUpError) {
-      setLoading(false);
-      setError(signUpError.message);
-      return;
-    }
+    // Clerk sign up (placeholder)
+    // TODO: Implement Clerk sign up logic here
     // Insert profile data
-    const userId = data?.user?.id;
-    if (userId) {
-      const { error: profileError } = await insertProfile(userId, form.name, form.mobile, form.username);
-      if (profileError) {
-        setLoading(false);
-        setError('Sign up succeeded, but failed to save profile: ' + profileError.message);
-        return;
-      }
-    }
+    // const userId = data?.user?.id;
+    // if (userId) {
+    //   const { error: profileError } = await insertProfile(userId, form.name, form.mobile, form.username);
+    //   if (profileError) {
+    //     setLoading(false);
+    //     setError('Sign up succeeded, but failed to save profile: ' + profileError.message);
+    //     return;
+    //   }
+    // }
     setLoading(false);
     navigate('/login');
   };

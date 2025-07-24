@@ -1,4 +1,3 @@
-export * from './openai';
 export * from './anthropic';
 export * from './local';
 export * from './embeddings';

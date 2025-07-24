@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Embed PDF",
+    "description": "Embeds a PDF file into the vector database.",
+    "inputs": { "file": "PDF file path" },
+    "outputs": { "embeddingId": "string" },
+    "handlerPath": "./plugins/embedPdf.js",
+    "enabled": true
+  },
+  {
+    "name": "Translate Video",
+    "description": "Translates the audio of a video file.",
+    "inputs": { "file": "Video file path", "targetLang": "string" },
+    "outputs": { "translatedText": "string" },
+    "handlerPath": "./plugins/translateVideo.js",
+    "enabled": false
+  }
+] 

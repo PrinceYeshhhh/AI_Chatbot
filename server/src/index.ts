@@ -5,9 +5,11 @@ import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
-import * as dotenv from 'dotenv';
+import 'dotenv-safe/config';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 // Import routes
 import healthRoutes from './routes/health';
@@ -15,32 +17,17 @@ import apiRoutes from './routes/api';
 import authRoutes from './routes/auth';
 
 // Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env['PORT'] || 3001;
 const NODE_ENV = process.env['NODE_ENV'] || 'development';
 const CORS_ORIGIN = process.env['CORS_ORIGIN'] || 'http://localhost:5173';
 
-// Add at the top, after imports
-const REQUIRED_ENV_VARS = [
-  'PORT',
-  'NODE_ENV',
-  'CORS_ORIGIN',
-  'OPENAI_API_KEY',
-  'OPENAI_MODEL',
-  'OPENAI_EMBEDDING_MODEL',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'SUPABASE_ANON_KEY',
-  'JWT_SECRET',
-  'JWT_EXPIRES_IN'
-];
-const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
-if (missingVars.length > 0) {
-  console.error('Missing required environment variables:', missingVars.join(', '));
-  process.exit(1);
-}
+const server = http.createServer(app);
+const io = new SocketIOServer(server, { cors: { origin: '*' } });
+
+// Export io for use in other modules
+export { io };
 
 // Security middleware
 app.use(helmet());
@@ -160,38 +147,5 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // Start server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Smart Brain Server listening on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📚 API docs: http://localhost:${PORT}/api/docs`);
-  console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
-  process.exit(1);
-});
-
-export default app; 
+server.listen(PORT, () => {
+  console.log(`

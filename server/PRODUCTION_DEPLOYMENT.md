@@ -38,24 +38,28 @@ PORT=3001
 LOG_LEVEL=info
 
 # Database
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+NEON_DATABASE_URL=your_neon_database_url
+NEON_HOST=your_neon_host.neon.tech
+NEON_DATABASE=your_database_name
+NEON_USERNAME=your_username
+NEON_PASSWORD=your_password
 
 # AI Services
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-OPENAI_MAX_TOKENS=1000
-OPENAI_TEMPERATURE=0.7
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama3-70b-8192
+GROQ_MAX_TOKENS=1000
+GROQ_TEMPERATURE=0.7
+TOGETHER_API_KEY=your_together_api_key
+TOGETHER_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-base
 
 # Security
 JWT_SECRET=your_very_long_random_jwt_secret
 ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
 # Vector Store
-CHROMA_HOST=chromadb
-CHROMA_PORT=8000
+QDRANT_URL=https://your-cluster.qdrant.io
+QDRANT_API_KEY=your_qdrant_api_key
+QDRANT_COLLECTION=smart_brain_embeddings
 
 # Cache
 REDIS_URL=redis://redis:6379
@@ -141,7 +145,7 @@ Access Grafana at `http://localhost:3000`:
 
 - **System Overview**: CPU, Memory, Disk usage
 - **Application Metrics**: Request rate, response times, errors
-- **AI Service Metrics**: OpenAI API usage, vector search performance
+- **AI Service Metrics**: Groq API usage, vector search performance
 - **Database Metrics**: Connection pools, query performance
 
 ### 3. Alerting
@@ -162,23 +166,25 @@ Configure alerts for:
 |----------|-------------|---------|----------|
 | `NODE_ENV` | Environment | `development` | Yes |
 | `PORT` | Server port | `3001` | Yes |
-| `SUPABASE_URL` | Database URL | - | Yes |
-| `OPENAI_API_KEY` | OpenAI API key | - | Yes |
+| `NEON_DATABASE_URL` | Database URL | - | Yes |
+| `GROQ_API_KEY` | Groq API key | - | Yes |
 | `JWT_SECRET` | JWT signing secret | - | Yes |
 | `ALLOWED_ORIGINS` | CORS origins | `http://localhost:3000` | Yes |
 
 ### 2. AI Model Configuration
 
 ```bash
-# OpenAI Configuration
-OPENAI_MODEL=gpt-4                    # Model to use
-OPENAI_MAX_TOKENS=1000               # Max tokens per response
-OPENAI_TEMPERATURE=0.7               # Response creativity (0-1)
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+# Groq Configuration
+GROQ_MODEL=llama3-70b-8192          # Model to use
+GROQ_MAX_TOKENS=1000                # Max tokens per response
+GROQ_TEMPERATURE=0.7                # Response creativity (0-1)
+
+# Together.ai Configuration
+TOGETHER_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-base
 
 # Vector Store Configuration
-CHROMA_HOST=chromadb
-CHROMA_PORT=8000
+QDRANT_URL=https://your-cluster.qdrant.io
+QDRANT_API_KEY=your_qdrant_api_key
 SIMILARITY_THRESHOLD=0.7
 MAX_VECTOR_RESULTS=5
 ```
@@ -330,11 +336,11 @@ certbot renew
    docker-compose exec app env | grep SUPABASE
    ```
 
-3. **OpenAI API Errors**
+3. **Gemini API Errors**
    ```bash
    # Check API key
-   curl -H "Authorization: Bearer $OPENAI_API_KEY" \
-        https://api.openai.com/v1/models
+   curl -H "Authorization: Bearer $GROQ_API_KEY" \
+        https://generativelanguage.googleapis.com/v1beta/models
    
    # Monitor usage
    curl http://localhost:3001/api/status/detailed

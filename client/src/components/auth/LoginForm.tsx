@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
+import { useToast } from '../../App';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -12,6 +13,7 @@ const LoginForm: React.FC = () => {
   
   const { signIn } = useAuth()
   const navigate = useNavigate()
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,12 +25,15 @@ const LoginForm: React.FC = () => {
       
       if (error) {
         setError(error.message)
+        showToast(error.message, 'error')
       } else if (data?.user) {
         // Redirect to dashboard after successful login
+        showToast('Login successful!', 'success')
         navigate('/chat')
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
+      showToast('An unexpected error occurred. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
@@ -52,18 +57,6 @@ const LoginForm: React.FC = () => {
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    {error}
-                  </h3>
-                </div>
-              </div>
-            </div>
-          )}
           
           <div className="space-y-4">
             <div>

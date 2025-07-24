@@ -1,17 +1,18 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { AuthProvider } from '../../context/AuthContext'
+import { AuthProvider } from '../../../context/AuthContext'
 import LoginForm from '../LoginForm'
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the auth context
-const mockSignIn = jest.fn()
-const mockNavigate = jest.fn()
+const mockSignIn = vi.fn()
+const mockNavigate = vi.fn()
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+vi.mock('react-router-dom', () => ({
+  ...require('react-router-dom'),
   useNavigate: () => mockNavigate,
-}))
+}));
 
 const renderWithProviders = (component: React.ReactElement) => {
   return render(
@@ -25,7 +26,7 @@ const renderWithProviders = (component: React.ReactElement) => {
 
 describe('LoginForm', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('renders login form correctly', () => {

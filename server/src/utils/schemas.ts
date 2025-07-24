@@ -2,16 +2,20 @@ import { Response } from 'express';
 
 export function validateEnv() {
   const requiredEnvVars = [
-    'OPENAI_API_KEY',
-    'JWT_SECRET'
-  ];
-
-  const optionalEnvVars = [
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'CORS_ORIGIN',
-    'PORT',
-    'NODE_ENV'
+    'GROQ_API_KEY',
+    'TOGETHER_API_KEY',
+    'QDRANT_URL',
+    'QDRANT_API_KEY',
+    'CLERK_SECRET_KEY',
+    'NEON_HOST',
+    'NEON_DATABASE',
+    'NEON_USER',
+    'NEON_PASSWORD',
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
+    'JWT_SECRET',
+    'ENCRYPTION_KEY'
   ];
 
   const missingRequired = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -21,13 +25,13 @@ export function validateEnv() {
   }
 
   // Validate JWT_SECRET length
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+  if (process.env['JWT_SECRET'] && process.env['JWT_SECRET'].length < 32) {
     throw new Error('JWT_SECRET must be at least 32 characters long');
   }
 
-  // Validate OpenAI API key format
-  if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('sk-')) {
-    throw new Error('OPENAI_API_KEY must start with "sk-"');
+  // Validate Groq API key format
+  if (process.env['GROQ_API_KEY'] && !process.env['GROQ_API_KEY'].startsWith('gsk_')) {
+    throw new Error('GROQ_API_KEY must start with "gsk_"');
   }
 
   console.log('✅ Environment validation passed');

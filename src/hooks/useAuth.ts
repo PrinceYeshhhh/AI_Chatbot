@@ -1,33 +1,21 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase, getSession, signOut, getProfile } from '../services/supabaseClient';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
 export function useAuth() {
-  const [user, setUser] = useState<any>(null);
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshSession = useCallback(async () => {
-    setLoading(true);
-    const session = await getSession();
-    setUser(session?.user ?? null);
-    setLoading(false);
-  }, []);
-
   const refreshProfile = useCallback(async (userId?: string) => {
     if (!userId) return setProfile(null);
-    const { data, error } = await getProfile(userId);
-    setProfile(error ? null : data);
-  }, []);
+    // For Clerk, user profile is already available in user object
+    setProfile(user);
+  }, [user]);
 
   useEffect(() => {
-    refreshSession();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      refreshSession();
-    });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [refreshSession]);
+    setLoading(!isLoaded);
+  }, [isLoaded]);
 
   useEffect(() => {
     if (user?.id) {
@@ -43,10 +31,9 @@ export function useAuth() {
     loading,
     signOut: async () => {
       await signOut();
-      setUser(null);
       setProfile(null);
     },
-    refreshSession,
+    refreshSession: () => {}, // Clerk handles session automatically
     refreshProfile
   };
 } 

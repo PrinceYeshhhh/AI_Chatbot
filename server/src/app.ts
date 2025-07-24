@@ -14,13 +14,34 @@ import chatRoutes from './routes/chat';
 import uploadRoutes from './routes/upload';
 import trainingRoutes from './routes/training';
 import statusRoutes from './routes/status';
-import { logger } from './utils/logger';
+import { logger, logEvent } from './utils/logger';
+import { checkDependencies } from './utils/dependencyCheck';
 import { errorHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/auth.middleware';
 import { rbacMiddleware } from './middleware/rbac.middleware';
 import authRouter from './routes/auth';
 import docsRouter from './routes/docs';
+import userSettingsRouter from './routes/userSettings';
+import agentToolRouter from './routes/agentTool';
+import analyticsRouter from './routes/analytics';
+import { securityHeaders } from './middleware/securityHeaders';
+import { auditLogger } from './middleware/auditLogger';
+import { startVideoJobProcessor } from './services/retryQueue';
+import mainRouter from './routes';
 const expressPkg = { version: '4.x' };
+
+// Sentry error monitoring
+import * as Sentry from '@sentry/node';
+
+// --- Dependency Check ---
+checkDependencies(logger);
+
+// --- Sentry Setup ---
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || '',
+  tracesSampleRate: 1.0,
+  environment: process.env.NODE_ENV || 'development',
+});
 
 dotenv.config();
 
@@ -33,6 +54,22 @@ try {
 }
 
 const app = express();
+
+// --- Logging Middleware ---
+app.use((req, res, next) => {
+  logger.info({
+    eventType: 'http_request',
+    method: req.method,
+    url: req.url,
+    user: req.user?.id || null,
+    timestamp: new Date().toISOString(),
+  });
+  next();
+});
+
+// --- Sentry Request Handler ---
+app.use(Sentry.Handlers.requestHandler());
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
 if (process.env.NODE_ENV === 'production' || process.env.ENABLE_HELMET === 'true') {
@@ -53,17 +90,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Global rate limiter: 100 req/min/IP (fail-safe for all /api routes)
 const rateLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000') || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100') || 100,
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per IP
   message: {
     error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000') || 900000) / 1000)
+    retryAfter: 60
   }
 });
 
 const speedLimiter = slowDown({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000') || 15 * 60 * 1000,
+  windowMs: 60 * 1000,
   delayAfter: 50,
   delayMs: () => 500
 });
@@ -77,6 +115,7 @@ if (process.env.ENABLE_REQUEST_LOGGING === 'true') {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(securityHeaders);
 
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -96,6 +135,10 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/status', statusRoutes);
 app.use('/api/docs', docsRouter);
+app.use('/api/user-settings', userSettingsRouter);
+app.use('/api/agent-tools', agentToolRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api', mainRouter);
 app.get('/api/ping', (_req: Request, res: Response): void => { res.status(200).send('pong'); });
 
 // Test endpoint for chat without authentication
@@ -123,6 +166,20 @@ adminRouter.get('/test', (req: Request, res: Response) => {
   res.status(200).json({ message: 'Admin access granted', user });
 });
 app.use('/api/admin', authMiddleware, rbacMiddleware('admin'), adminRouter);
+
+// Add auditLogger to all /api routes
+app.use('/api', auditLogger('api_request'));
+
+// Metrics endpoint for observability
+app.get('/api/metrics', async (_req: Request, res: Response) => {
+  // Mocked metrics for now; replace with real queries as needed
+  res.json({
+    uptime: process.uptime(),
+    recentErrors: 0, // TODO: Query from logs or error DB
+    activeUsers: 1, // TODO: Query from analytics/events
+    timestamp: new Date().toISOString()
+  });
+});
 
 const swaggerDefinition = {
   openapi: '3.0.0',
@@ -154,6 +211,10 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+app.get('/openapi.json', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'apiDocs', 'openapi.json'));
+});
+
 // Serve backend API only - frontend is deployed separately
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -174,47 +235,34 @@ app.use('/api/*', (req: Request, res: Response) => {
   });
 });
 
+// Enhanced error logging in errorHandler
+app.use((err: any, req: Request, res: Response, next: any) => {
+  logger.error({
+    message: err.message,
+    stack: err.stack,
+    userId: req.user?.id,
+    url: req.originalUrl,
+    method: req.method,
+    body: req.body
+  }, 'API error');
+  next(err);
+});
+
 app.use(errorHandler);
+
+// Sentry error handler (after all routes)
+app.use(Sentry.Handlers.errorHandler());
+
+// Note: For async file uploads/chunking/embedding, use a background job queue (e.g., BullMQ, Cloud Tasks) and resumable upload protocol (e.g., tus, S3 multipart). Ensure all file processing is non-blocking and can be retried/resumed.
+startVideoJobProcessor();
 
 const server = app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`🚀 Server listening on port ${PORT} (Express v${expressPkg.version})`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`📚 API docs: http://localhost:${PORT}/api/docs`);
+  console.log(`🔧 Agent Tools Framework: Ready`);
+  console.log(`📚 API Documentation: http://localhost:${PORT}/api/docs`);
+  console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err);
-  server.close(() => {
-    console.log('✅ Server closed due to uncaught exception');
-    process.exit(1);
-  });
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-  server.close(() => {
-    console.log('✅ Server closed due to unhandled rejection');
-    process.exit(1);
-  });
-}); 
+export default app;

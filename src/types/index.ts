@@ -1,6 +1,13 @@
 export type MessageStatus = 'sending' | 'sent' | 'failed';
 export type MessageSender = 'user' | 'bot';
 
+export interface EvaluationResult {
+  score: number;
+  flagged: boolean;
+  reason: string;
+  maxSimilarity?: number;
+}
+
 export interface Message<T = Record<string, unknown>> {
   id: string;
   content: string;
@@ -9,6 +16,16 @@ export interface Message<T = Record<string, unknown>> {
   status?: MessageStatus;
   intent?: string;
   metadata?: T;
+  // Multilingual and voice fields
+  lang?: string; // Language code (e.g., 'en', 'es')
+  voiceGender?: 'neutral' | 'female' | 'male';
+  voiceRate?: number;
+  voicePitch?: number;
+  voiceProvider?: 'native' | 'elevenlabs';
+  translatedFrom?: string; // Original language if translated
+  // Evaluation and feedback
+  evaluation?: EvaluationResult;
+  userFeedback?: 'up' | 'down';
 }
 
 export interface Conversation<T = Record<string, unknown>> {

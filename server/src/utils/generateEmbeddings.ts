@@ -18,33 +18,34 @@ function chunkIntoBatches<T>(arr: T[], batchSize: number): T[][] {
   return batches;
 }
 
-async function fetchEmbeddingsBatch(
+function isValidChunk(text: string): boolean {
+  if (!text) return false;
+  // Remove whitespace and check if anything remains
+  const cleaned = text.replace(/\s+/g, '');
+  // If only symbols, skip
+  if (!/[\w\p{L}\p{N}]/u.test(cleaned)) return false;
+  return cleaned.length > 0;
+}
+
+async function fetchLocalEmbeddingsBatch(
   inputTexts: string[],
-  model: string,
-  apiKey: string,
-  maxRetries = 3
+  maxRetries = 2 // One retry on failure
 ): Promise<number[][]> {
   let attempt = 0;
   let lastError: any = null;
   while (attempt < maxRetries) {
     try {
-      const response = await fetch('https://api.openai.com/v1/embeddings', {
+      const response = await fetch('http://localhost:8000/embed', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          input: inputTexts,
-          model
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: inputTexts })
       });
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`OpenAI API error: ${response.status} ${error}`);
+        throw new Error(`Local embedding error: ${response.status} ${error}`);
       }
-      const data = await response.json() as { data: { embedding: number[] }[] };
-      return (data.data || []).map((d: any) => d.embedding || []);
+      const data = await response.json() as { embeddings: number[][] };
+      return (data.embeddings || []);
     } catch (err) {
       lastError = err;
       const backoff = 1000 * Math.pow(2, attempt);
@@ -57,31 +58,44 @@ async function fetchEmbeddingsBatch(
 
 export async function generateEmbeddings(
   chunks: ChunkWithMetadata[],
-  model = 'text-embedding-3-small',
   batchSize = 50
 ): Promise<EmbeddingWithMetadata[]> {
-  const apiKey = process.env['OPENAI_API_KEY'];
-  if (!apiKey) throw new Error('OPENAI_API_KEY not set');
   const results: EmbeddingWithMetadata[] = [];
   let batchNum = 0;
-  for (const batch of chunkIntoBatches(chunks, batchSize)) {
+  // Filter out empty or symbol-only chunks
+  const validChunks = chunks.filter(item => isValidChunk(item.chunk));
+  for (const batch of chunkIntoBatches(validChunks, batchSize)) {
     const inputTexts = batch.map(item => item.chunk);
     const t0 = Date.now();
-    const embeddings = await fetchEmbeddingsBatch(inputTexts, model, apiKey);
+    let embeddings: number[][] = [];
+    try {
+      embeddings = await fetchLocalEmbeddingsBatch(inputTexts, 2);
+    } catch (err) {
+      // Log all failed chunk indices and fileIds in this batch
+      batch.forEach(item => {
+        const idx = item.metadata?.['chunkIndex'];
+        const fileId = item.metadata?.['fileId'];
+        console.error(`Embedding failed for chunkIndex=${idx}, fileId=${fileId}:`, err);
+      });
+      continue;
+    }
     const t1 = Date.now();
     for (let i = 0; i < batch.length; i++) {
       const emb = embeddings[i] || [];
       if (!Array.isArray(emb) || emb.length === 0) {
-        console.error(`No embedding returned for batch ${batchNum}, item ${i}`);
+        const idx = batch[i]?.metadata?.['chunkIndex'];
+        const fileId = batch[i]?.metadata?.['fileId'];
+        console.error(`No embedding returned for batch ${batchNum}, item ${i} (chunkIndex=${idx}, fileId=${fileId})`);
         continue;
       }
       results.push({
         embedding: emb,
         metadata: batch[i]?.metadata ?? {}
       });
-      console.log(`Embedding batch ${batchNum}, item ${i}: length=${emb.length}`);
+      // Optionally log embedding length
+      // console.log(`Embedding batch ${batchNum}, item ${i}: length=${emb.length}`);
     }
-    console.log(`Batch ${batchNum} processed in ${t1 - t0}ms`);
+    // console.log(`Batch ${batchNum} processed in ${t1 - t0}ms`);
     batchNum++;
   }
   return results;

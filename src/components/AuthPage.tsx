@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, Phone, Eye, EyeOff, MessageSquare, Shield, Brain, Upload, Zap, Users } from 'lucide-react';
+import Tooltip from '../../client/src/components/Tooltip';
+import { useTranslation } from 'react-i18next';
 
 export const AuthPage: React.FC = () => {
+  const { t } = useTranslation();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +81,11 @@ export const AuthPage: React.FC = () => {
                     <Brain className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">AI Memory</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      <Tooltip content={<span dangerouslySetInnerHTML={{ __html: t('memory_panel_tooltip') }} />}>
+                        AI Memory
+                      </Tooltip>
+                    </h3>
                     <p className="text-sm text-gray-600">Remembers your conversations</p>
                   </div>
                 </div>

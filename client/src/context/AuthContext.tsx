@@ -1,25 +1,55 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session } from '@supabase/supabase-js'
-import { auth } from '../lib/supabase'
+import { User, Session } from '@clerk/clerk-react'
+import { auth } from '../lib/auth'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string) => Promise<{ data: any; error: any }>
   signIn: (email: string, password: string) => Promise<{ data: any; error: any }>
+  signUp: (email: string, password: string) => Promise<{ data: any; error: any }>
   signOut: () => Promise<{ error: any }>
+  getToken: () => string | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = React.createContext<AuthContextType>({
+  user: null,
+  session: null,
+  loading: true,
+  signIn: async () => ({ data: null, error: null }),
+  signUp: async () => ({ data: null, error: null }),
+  signOut: async () => ({ error: null }),
+  getToken: () => null,
+})
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
+export const useAuth = () => React.useContext(AuthContext)
+
+interface E2EEContextType {
+  password: string;
+  setPassword: (pw: string) => void;
+  salt: string;
+}
+
+export const E2EEContext = createContext<E2EEContextType | undefined>(undefined);
+
+export const useE2EE = () => {
+  const context = useContext(E2EEContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useE2EE must be used within an E2EEProvider');
   }
-  return context
-}
+  return context;
+};
+
+export const E2EEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const [password, setPassword] = useState('');
+  const salt = user?.id || '';
+  return (
+    <E2EEContext.Provider value={{ password, setPassword, salt }}>
+      {children}
+    </E2EEContext.Provider>
+  );
+};
 
 interface AuthProviderProps {
   children: React.ReactNode
@@ -29,6 +59,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Use impersonation token if present
+  const getToken = () => {
+    return localStorage.getItem('impersonationToken') || session?.token;
+  };
 
   useEffect(() => {
     // Get initial session
@@ -72,6 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }
 
   const signOut = async () => {
+    localStorage.removeItem('impersonationToken');
     return await auth.signOut()
   }
 
@@ -82,6 +118,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signIn,
     signOut,
+    // Optionally expose getToken for API calls
+    getToken,
   }
 
   return (

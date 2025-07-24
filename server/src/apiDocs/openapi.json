@@ -1,0 +1,165 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Imperial AI Chatbot API",
+    "version": "1.1.0",
+    "description": "Production-grade AI Chatbot API with file upload, RAG, feedback, analytics, and multi-tenant support."
+  },
+  "paths": {
+    "/api/upload": {
+      "post": {
+        "summary": "Upload a file (PDF, DOCX, TXT, CSV, XLS, XLSX)",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": { "type": "string", "format": "binary" }
+                },
+                "required": ["files"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "File uploaded and processed" },
+          "400": { "description": "Invalid file or request" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/files/{fileId}": {
+      "delete": {
+        "summary": "Delete a file and all related embeddings/chunks",
+        "parameters": [
+          { "name": "fileId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "File and embeddings deleted" },
+          "401": { "description": "Unauthorized" },
+          "404": { "description": "File not found" }
+        }
+      }
+    },
+    "/api/feedback": {
+      "post": {
+        "summary": "Submit user feedback for an AI response",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_id": { "type": "string" },
+                  "response_id": { "type": "string" },
+                  "feedback": { "type": "string", "enum": ["positive", "negative"] },
+                  "message_text": { "type": "string" },
+                  "timestamp": { "type": "string", "format": "date-time" }
+                },
+                "required": ["user_id", "response_id", "feedback"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Feedback submitted" },
+          "409": { "description": "Feedback already submitted for this response" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Get health and performance metrics",
+        "responses": {
+          "200": {
+            "description": "Metrics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uptime": { "type": "number" },
+                    "recentErrors": { "type": "integer" },
+                    "activeUsers": { "type": "integer" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/query": {
+      "post": {
+        "summary": "Query the RAG pipeline for relevant file-based context",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_id": { "type": "string" },
+                  "query": { "type": "string" },
+                  "file_id": { "type": "string" },
+                  "top_k": { "type": "integer" }
+                },
+                "required": ["user_id", "query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relevant chunks returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chunks": {
+                      "type": "array",
+                      "items": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/memory/file/{fileId}/chunks": {
+      "get": {
+        "summary": "Get all chunks/embeddings for a file",
+        "parameters": [
+          { "name": "fileId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of chunks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chunks": {
+                      "type": "array",
+                      "items": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "404": { "description": "File not found" }
+        }
+      }
+    }
+  }
+} 

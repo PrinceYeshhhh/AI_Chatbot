@@ -1,4 +1,4 @@
-import { authMiddleware } from '../middleware/auth.middleware';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { validateChatRequest, validateTrainingData } from '../middleware/validation';
 
 // Mock Request, Response, and NextFunction

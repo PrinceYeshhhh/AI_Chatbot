@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
 interface AuthContextType {
   user: any;
@@ -12,47 +12,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
+  const { user, isLoaded } = useUser();
+  const { signIn, signOut } = useClerk();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    const getSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setUser(data.session?.user || null);
-      setLoading(false);
-    };
-    getSession();
-    // Listen for auth state changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-    return () => {
-      listener?.subscription.unsubscribe();
-    };
-  }, []);
+    setLoading(!isLoaded);
+  }, [isLoaded]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setUser(data?.user || null);
-    setLoading(false);
-    if (error) throw error;
-    return data;
+    try {
+      const result = await signIn.create({
+        identifier: email,
+        password,
+      });
+      setLoading(false);
+      return result;
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
   };
 
   const logout = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    setUser(null);
-    setLoading(false);
+    try {
+      await signOut();
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
   };
 
-  // Fetch user profile to check role
+  // Check if user is admin based on Clerk user metadata
   const isAdmin = () => {
-    // You may want to cache this or fetch from profile
-    // For now, check user metadata or custom claim
-    return user?.user_metadata?.role === 'admin' || user?.role === 'admin';
+    return user?.publicMetadata?.role === 'admin' || user?.privateMetadata?.role === 'admin';
   };
 
   return (

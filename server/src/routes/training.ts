@@ -2,7 +2,8 @@ import express, { Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { permissionMiddleware } from '../middleware/permission.middleware';
 import { validateTrainingData } from '../middleware/validation';
-import { successResponse, errorResponse } from '../utils/schemas';
+import { z } from 'zod';
+import xss from 'xss';
 
 // Extend Request to include user
 interface AuthenticatedRequest extends Request {
@@ -20,6 +21,32 @@ let trainingDataId = 1;
 
 const router = express.Router();
 
+const bulkDataSchema = z.object({
+  data: z.array(z.object({
+    input: z.string().min(1),
+    expectedOutput: z.string().min(1),
+    intent: z.string().min(1)
+  }))
+});
+const fineTuneSchema = z.object({
+  // Add fields as needed for fine-tune jobs
+});
+function validateBody(schema: z.ZodSchema<any>) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: 'Invalid input', details: result.error.errors });
+      return;
+    }
+    for (const key in req.body) {
+      if (typeof req.body[key] === 'string') {
+        req.body[key] = xss(req.body[key]);
+      }
+    }
+    next();
+  };
+}
+
 // Get all training data
 router.get('/data', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -28,7 +55,8 @@ router.get('/data', authMiddleware, async (req: AuthenticatedRequest, res: Respo
     
     const paginatedData = trainingData.slice(offset, offset + Number(limit));
     
-    successResponse(res, {
+    res.json({
+      success: true,
       data: paginatedData,
       pagination: {
         page: Number(page),
@@ -39,7 +67,7 @@ router.get('/data', authMiddleware, async (req: AuthenticatedRequest, res: Respo
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to get training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to get training data' });
   }
 });
 
@@ -59,20 +87,20 @@ router.post('/data', authMiddleware, validateTrainingData, async (req: Authentic
     
     trainingData.push(newData);
     
-    successResponse(res, { message: 'Training data added successfully' });
+    res.json({ success: true, message: 'Training data added successfully' });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to add training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to add training data' });
   }
 });
 
 // Bulk add training data
-router.post('/data/bulk', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/data/bulk', validateBody(bulkDataSchema), authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { data } = req.body;
     
     if (!Array.isArray(data)) {
-      errorResponse(res, 'Data must be an array', 400);
+      res.status(400).json({ success: false, error: 'Data must be an array' });
       return;
     }
     
@@ -98,7 +126,8 @@ router.post('/data/bulk', authMiddleware, async (req: AuthenticatedRequest, res:
       }
     });
     
-    successResponse(res, {
+    res.json({
+      success: true,
       message: 'Bulk training data processed',
       results,
       total: data.length,
@@ -106,7 +135,7 @@ router.post('/data/bulk', authMiddleware, async (req: AuthenticatedRequest, res:
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to add training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to add training data' });
   }
 });
 
@@ -114,25 +143,36 @@ router.post('/data/bulk', authMiddleware, async (req: AuthenticatedRequest, res:
 router.delete('/data/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    
+    if (!id) {
+      res.status(400).json({ success: false, error: 'Data ID is required' });
+      return;
+    }
+    
     const dataId = parseInt(id);
+    
+    if (isNaN(dataId)) {
+      res.status(400).json({ success: false, error: 'Invalid data ID' });
+      return;
+    }
     
     const index = trainingData.findIndex(item => item.id === dataId);
     if (index === -1) {
-      errorResponse(res, 'Training data not found', 404);
+      res.status(404).json({ success: false, error: 'Training data not found' });
       return;
     }
     
     trainingData.splice(index, 1);
     
-    successResponse(res, { message: 'Training data deleted successfully' });
+    res.json({ success: true, message: 'Training data deleted successfully' });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to delete training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to delete training data' });
   }
 });
 
 // Get training statistics
-router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/stats', authMiddleware, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const stats = {
       total: trainingData.length,
@@ -143,10 +183,10 @@ router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res: Resp
       recent: trainingData.slice(-5)
     };
     
-    successResponse(res, stats);
+    res.json({ success: true, ...stats });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to get training statistics');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to get training statistics' });
   }
 });
 
@@ -170,59 +210,67 @@ router.get('/export', authMiddleware, async (req: AuthenticatedRequest, res: Res
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to export training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to export training data' });
   }
 });
 
 // Clear all training data
-router.delete('/clear', authMiddleware, permissionMiddleware('manage_training'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.delete('/clear', authMiddleware, permissionMiddleware('manage_training'), async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     trainingData = [];
     trainingDataId = 1;
     
-    successResponse(res, { message: 'All training data cleared successfully' });
+    res.json({ success: true, message: 'All training data cleared successfully' });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to clear training data');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to clear training data' });
   }
 });
 
 // Fine-tuning endpoints (stubs)
-router.post('/fine-tune', authMiddleware, permissionMiddleware('manage_models'), async (req: Request, res: Response): Promise<void> => {
+router.post('/fine-tune', validateBody(fineTuneSchema), authMiddleware, permissionMiddleware('manage_models'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     // Stub implementation
-    successResponse(res, { 
+    res.json({ 
+      success: true,
       message: 'Fine-tuning job started',
       jobId: 'ft-job-' + Date.now()
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to start fine-tuning');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to start fine-tuning' });
   }
 });
 
-router.get('/fine-tune/jobs', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.get('/fine-tune/jobs', authMiddleware, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     // Stub implementation
-    successResponse(res, { jobs: [] });
+    res.json({ success: true, jobs: [] });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to get fine-tuning jobs');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to get fine-tuning jobs' });
   }
 });
 
-router.get('/fine-tune/jobs/:jobId', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.get('/fine-tune/jobs/:jobId', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { jobId } = req.params;
+    
+    if (!jobId) {
+      res.status(400).json({ success: false, error: 'Job ID is required' });
+      return;
+    }
+    
     // Stub implementation
-    successResponse(res, { 
+    res.json({ 
+      success: true,
       jobId,
       status: 'completed',
       progress: 100
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    errorResponse(res, errorMessage || 'Failed to get fine-tuning job status');
+    res.status(500).json({ success: false, error: errorMessage || 'Failed to get fine-tuning job status' });
   }
 });
 

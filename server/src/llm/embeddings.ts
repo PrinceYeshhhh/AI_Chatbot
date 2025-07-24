@@ -1,7 +1,7 @@
-// Embeddings wrapper (OpenAI for now)
-import { callOpenAIEmbeddings } from './openai';
+// Embeddings wrapper (Together.ai)
+import { generateEmbeddings as generateLocalEmbeddings } from '../utils/generateEmbeddings';
 
 export async function generateEmbeddings(textChunks: string[]) {
-  // Use OpenAI for now
-  return await callOpenAIEmbeddings(textChunks);
+  // Use local microservice for embeddings
+  return await generateLocalEmbeddings(textChunks.map(chunk => ({ chunk, metadata: {} })));
 } 

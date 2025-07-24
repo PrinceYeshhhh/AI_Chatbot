@@ -1,5 +1,3 @@
-import { supabase } from '../../lib/supabase';
-
 // Fine-tuning pipeline index
 // Data prep, feedback collection, and training jobs
 
@@ -19,8 +17,15 @@ export async function prepareFineTuneData(userId: string, input: any, output: an
   }
 }
 
-export function launchFineTuneJob(config: any): any {
-  // TODO: Launch fine-tuning job (OpenAI, Hugging Face, etc.)
-  // This is a stub for now
-  return null;
+export async function launchFineTuneJob(config: any): Promise<any> {
+  // Example: Use Together API for fine-tuning (replace with your preferred provider)
+  const apiKey = process.env['TOGETHER_API_KEY'];
+  if (!apiKey) throw new Error('TOGETHER_API_KEY not set');
+  const response = await fetch('https://api.together.xyz/v1/fine-tune', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(config)
+  });
+  if (!response.ok) throw new Error('Fine-tuning job failed');
+  return await response.json();
 } 

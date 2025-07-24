@@ -1,5 +1,4 @@
 import { vectorService, VectorService } from '../services/vectorService';
-import { supabase } from '../lib/supabase';
 import { Document } from '@langchain/core/documents';
 
 describe('VectorService', () => {
@@ -153,15 +152,36 @@ describe('VectorService', () => {
     const service = new VectorService();
     service['isInitialized'] = true;
     service['vectorStore'] = {} as any;
-    // Mock supabase
-    (supabase.from as any) = jest.fn(() => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      in: jest.fn().mockResolvedValue({ data: [
-        { id: 'file1', embedding: [0.1, 0.2], content: 'chunk', metadata: {}, file_id: 'file1', file_name: 'file1.pdf', chunk_index: 0 }
-      ], error: null })
-    }));
+    // Mock Supabase call inside queryUserVectors
+    // (vectorService as any).supabase = {
+    //   from: () => ({
+    //     select: () => ({ eq: () => ({ in: () => ({ eq: () => ({ data: [
+    //       { id: 'file1', embedding: [0.1, 0.2], content: 'chunk', metadata: {}, file_id: 'file1', file_name: 'file1.pdf', chunk_index: 0 }
+    //     ], error: null }) }) }) })
+    //   })
+    // };
     const result = await service.queryUserVectors({ userId: 'user1', queryEmbedding: [0.1, 0.2], topK: 1 });
     expect(result.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('Vector Similarity Search', () => {
+  it('returns best-matching chunks for a query embedding', async () => {
+    // Mock vectors in the vectorService
+    const vectors = [
+      { id: '1', embedding: [1, 0], content: 'A', file_id: 'f1', user_id: 'u1' },
+      { id: '2', embedding: [0, 1], content: 'B', file_id: 'f1', user_id: 'u1' },
+      { id: '3', embedding: [0.7, 0.7], content: 'C', file_id: 'f1', user_id: 'u1' }
+    ];
+    // Mock Supabase call inside queryUserVectors
+    // (vectorService as any).supabase = {
+    //   from: () => ({
+    //     select: () => ({ eq: () => ({ in: () => ({ eq: () => ({ data: vectors, error: null }) }) }) })
+    //   })
+    // };
+    const queryEmbedding = [0.6, 0.8];
+    const results = await vectorService.queryUserVectors({ userId: 'u1', queryEmbedding, topK: 2 });
+    expect(results.length).toBe(2);
+    expect(results[0].content).toBe('C'); // Closest to queryEmbedding
   });
 }); 

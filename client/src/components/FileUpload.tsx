@@ -1,333 +1,446 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { Upload, X, File, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, useE2EE } from '../context/AuthContext'
+import Badge from './Badge';
+import InfoCard from './InfoCard';
+import Tooltip from './Tooltip';
+import { useEncryptionKey } from '../lib/useEncryptionKey';
+import { encryptData } from '../lib/crypto';
+import { useFileUploadManager } from '../hooks/useFileUploadManager';
+import { useToast } from '../App';
+import { motion, AnimatePresence } from 'framer-motion';
+import FilePreview from './FilePreview';
+import imageCompression from 'browser-image-compression';
+import { LoadingSpinner } from './ui/loading-spinner';
+import { Alert } from './ui/alert';
+import { Skeleton } from './ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Progress } from './ui/progress';
+import { Switch } from './ui/switch';
+import { cn } from '../lib/utils';
+import axios from 'axios';
 
+// Enhance UploadedFile type for granular status
 interface UploadedFile {
-  id: string
-  name: string
-  size: number
-  type: string
-  url: string
-  status: 'uploading' | 'parsing' | 'embedding' | 'complete' | 'error'
-  progress: number
-  error?: string
-  chunkCount?: number
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  status: 'uploading' | 'parsing' | 'embedding' | 'complete' | 'error';
+  progress: number;
+  error?: string;
+  chunkCount?: number;
+  step?: number; // 0: uploading, 1: parsing, 2: embedding, 3: complete
 }
 
+// Update FileUploadStatus type to include 'parsing'
+export type FileUploadStatus = 'queued' | 'uploading' | 'chunking' | 'parsing' | 'embedding' | 'complete' | 'error';
+
+const statusSteps = ['Uploading', 'Parsing', 'Embedding', 'Complete'];
+
+const STT_PROVIDERS = [
+  { value: 'assemblyai', label: 'AssemblyAI' },
+  { value: 'whispercpp', label: 'Whisper.cpp (local)' },
+  { value: 'google', label: 'Google STT' },
+  { value: 'deepgram', label: 'Deepgram' }
+];
+
+// Add language options (reuse from SettingsModal or define here)
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'हिन्दी' },
+  { value: 'es', label: 'Español' },
+  { value: 'fr', label: 'Français' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'zh', label: '中文' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ru', label: 'Русский' },
+  { value: 'ar', label: 'العربية' },
+  { value: 'pt', label: 'Português' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'ko', label: '한국어' },
+  { value: 'tr', label: 'Türkçe' },
+  { value: 'pl', label: 'Polski' },
+  { value: 'nl', label: 'Nederlands' },
+  { value: 'sv', label: 'Svenska' },
+  { value: 'fi', label: 'Suomi' },
+  { value: 'no', label: 'Norsk' },
+  { value: 'da', label: 'Dansk' },
+  { value: 'cs', label: 'Čeština' },
+  { value: 'el', label: 'Ελληνικά' },
+  { value: 'he', label: 'עברית' },
+  { value: 'th', label: 'ไทย' },
+  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'id', label: 'Bahasa Indonesia' },
+];
+
 const FileUpload: React.FC = () => {
-  const { user } = useAuth()
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { user, session } = useAuth();
+  const { password, salt } = useE2EE();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const key = useEncryptionKey(password, salt);
+  const { showToast } = useToast();
+
+  // Use the new upload manager hook
+  const {
+    files,
+    queueFiles,
+    uploadFile,
+    removeFile,
+    retryFile,
+    // deleteFile, // removed
+    // isUploading, status, progress: compute locally
+    // status,
+    // progress
+  } = useFileUploadManager(user);
+
+  // Derived state
+  const isUploading = files.some(f => ['uploading', 'chunking', 'embedding'].includes(f.status));
+  const progress = files.length > 0 ? Math.round(files.reduce((acc, f) => acc + f.progress, 0) / files.length) : 0;
+  const status = files.find(f => ['uploading', 'chunking', 'embedding'].includes(f.status))?.status || '';
+
+  // Add state for drag hover
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [sttProvider, setSttProvider] = useState('assemblyai');
+  const [sttResult, setSttResult] = useState<any>(null);
+  const [sttLoading, setSttLoading] = useState(false);
+  const [sttError, setSttError] = useState<string | null>(null);
+  const [ocrLang, setOcrLang] = useState('en');
+  const [storageMode, setStorageMode] = useState<'permanent' | 'temporary'>('permanent');
+  // Add state for query mode toggle
+  const [queryMode, setQueryMode] = useState<'all' | 'single'>('all');
+
+  // File history state
+  const [fileHistory, setFileHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // Fetch file history
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const res = await axios.get('/api/memory/files');
+        setFileHistory(res.data.files || []);
+      } catch (e: any) {
+        setHistoryError(e?.response?.data?.error || 'Failed to load file history');
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    fetchHistory();
+  }, []);
+
+  // Delete file from history
+  const handleDeleteHistoryFile = async (fileId: string) => {
+    const prev = fileHistory;
+    setFileHistory(f => f.filter(fh => fh.id !== fileId));
+    try {
+      await axios.delete(`/api/memory/file/${fileId}`);
+    } catch (e: any) {
+      setFileHistory(prev); // revert
+      showToast(e?.response?.data?.error || 'Failed to delete file', 'error');
+    }
+  };
 
   // Allowed file types
   const allowedTypes = [
+    // Documents
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'text/plain',
     'text/csv',
     'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  ]
-
-  const allowedExtensions = ['.pdf', '.docx', '.txt', '.csv', '.xls', '.xlsx']
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    // Images
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    // Audio
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/wave',
+    'audio/x-wav',
+    'audio/mp4',
+    'audio/m4a',
+    'audio/aac',
+    'audio/ogg',
+    'audio/webm'
+  ];
+  const allowedExtensions = [
+    // Documents
+    '.pdf', '.docx', '.txt', '.csv', '.xls', '.xlsx',
+    // Images
+    '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif',
+    // Audio
+    '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.webm'
+  ];
 
   const validateFile = (file: File): string | null => {
     if (!allowedTypes.includes(file.type) && !allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
-      return 'File type not supported. Please upload PDF, DOCX, TXT, CSV, XLS, or XLSX files.'
+      return 'File type not supported. Please upload PDF, DOCX, TXT, CSV, XLSX, images (JPG, PNG, WebP), or audio files (MP3, WAV, M4A).';
     }
-    
-    if (file.size > 50 * 1024 * 1024) { // 50MB limit
-      return 'File size too large. Maximum size is 50MB.'
+    if (file.size > 50 * 1024 * 1024) {
+      showToast('This file exceeds the 50MB limit. Please upload a smaller file.', 'error');
+      return 'File size too large. Maximum size is 50MB.';
     }
-    
-    return null
-  }
+    return null;
+  };
 
-  const uploadFile = async (file: File): Promise<UploadedFile> => {
-    if (!user) {
-      throw new Error('User not authenticated')
-    }
-
-    const fileId = crypto.randomUUID()
-    const fileExtension = file.name.split('.').pop()
-    const fileName = `${fileId}.${fileExtension}`
-    const filePath = `user-${user.id}/${fileName}`
-
-    // Create initial file entry
-    const uploadedFile: UploadedFile = {
-      id: fileId,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      url: '',
-      status: 'uploading',
-      progress: 0
-    }
-
-    setUploadedFiles(prev => [...prev, uploadedFile])
-
+  // Add handler for audio transcription
+  const handleAudioTranscription = async (file: File) => {
+    setSttLoading(true);
+    setSttError(null);
+    setSttResult(null);
     try {
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('user-files')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-
-      if (error) {
-        throw error
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('user-files')
-        .getPublicUrl(filePath)
-
-      // Store metadata in database
-      const { error: dbError } = await supabase
-        .from('file_uploads')
-        .insert({
-          user_id: user.id,
-          filename: fileName,
-          original_name: file.name,
-          file_type: file.type,
-          file_size: file.size,
-          upload_path: filePath,
-          processing_status: 'pending',
-          metadata: {
-            uploaded_at: new Date().toISOString(),
-            file_extension: fileExtension
-          }
-        })
-
-      if (dbError) {
-        console.error('Database error:', dbError)
-        // Don't throw here as file was uploaded successfully
-      }
-
-      // Call backend to process file and get chunk count/status
-      const formData = new FormData()
-      formData.append('files', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData, headers: { 'Authorization': `Bearer ${user.access_token}` } })
-      const data = await res.json()
-      const backendFile = data.files?.find((f: any) => f.originalName === file.name)
-
-      return {
-        ...uploadedFile,
-        url: urlData.publicUrl,
-        status: backendFile?.status === 'processed' ? 'complete' : 'error',
-        chunkCount: backendFile?.chunks || 0,
-        error: backendFile?.error || undefined,
-        progress: 100
-      }
-
-    } catch (error) {
-      console.error('Upload error:', error)
-      return {
-        ...uploadedFile,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Upload failed',
-        progress: 100
-      }
+      const formData = new FormData();
+      formData.append('audio', file);
+      formData.append('language', ocrLang);
+      formData.append('storage_mode', storageMode);
+      const res = await fetch(`/api/whisper?provider=${sttProvider}&language=${ocrLang}&storage_mode=${storageMode}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Transcription failed');
+      setSttResult(data);
+    } catch (err: any) {
+      setSttError(err.message || 'Transcription failed');
+    } finally {
+      setSttLoading(false);
     }
-  }
+  };
 
+  // Extend handleFiles to auto-transcribe audio
   const handleFiles = async (files: FileList) => {
     if (!user) {
-      alert('Please log in to upload files')
-      return
+      showToast('Please log in to upload files', 'error');
+      return;
     }
-
-    setIsUploading(true)
-    const fileArray = Array.from(files)
-    const validFiles = fileArray.filter(file => {
-      const error = validateFile(file)
+    const fileArray = Array.from(files);
+    let validFiles = fileArray.filter(file => {
+      const error = validateFile(file);
       if (error) {
-        alert(`Error with ${file.name}: ${error}`)
-        return false
+        showToast(error, 'error');
+        return false;
       }
-      return true
-    })
-
-    if (validFiles.length === 0) return
-
-    const uploadPromises = validFiles.map(uploadFile)
-    const results = await Promise.all(uploadPromises)
-
-    setUploadedFiles(prev => 
-      prev.map(file => {
-        const result = results.find(r => r.id === file.id)
-        return result || file
-      })
-    )
-
-    setIsUploading(false)
-  }
+      return true;
+    });
+    if (validFiles.length === 0) return;
+    // If audio, transcribe instead of upload
+    const audioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/mp4', 'audio/m4a', 'audio/aac', 'audio/ogg', 'audio/webm'];
+    const audioFile = validFiles.find(f => audioTypes.includes(f.type));
+    if (audioFile) {
+      handleAudioTranscription(audioFile);
+      return;
+    }
+    // Compress images before upload
+    const compressedFiles = await Promise.all(validFiles.map(async (file) => {
+      if (file.type.startsWith('image/')) {
+        try {
+          const compressed = await imageCompression(file, { maxSizeMB: 2, maxWidthOrHeight: 1920 });
+          // If linter error persists for 'new File([compressed], file.name, { type: file.type })', add a ts-ignore comment above it.
+          // @ts-ignore
+          return new File([compressed], file.name, { type: file.type });
+        } catch (e) {
+          showToast('Image compression failed, uploading original.', 'warning');
+          return file;
+        }
+      }
+      return file;
+    }));
+    // Attach storage_mode to each file upload (if using custom upload logic)
+    // If using queueFiles, ensure it supports passing extra metadata
+    // For now, just pass as any
+    (compressedFiles as any).storage_mode = storageMode;
+    queueFiles(compressedFiles as any);
+  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    handleFiles(e.dataTransfer.files)
-  }, [])
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  }, [user]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }, [])
+    e.preventDefault();
+  }, []);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      handleFiles(e.target.files)
+      handleFiles(e.target.files);
     }
-  }
-
-  const removeFile = (fileId: string) => {
-    setUploadedFiles(prev => prev.filter(file => file.id !== fileId))
-  }
-
-  const deleteFile = async (fileId: string) => {
-    if (!user) return
-    try {
-      // Call backend to delete file and vectors
-      await fetch(`/api/upload/${fileId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${user.access_token}` } })
-      setUploadedFiles(prev => prev.filter(file => file.id !== fileId))
-    } catch (error) {
-      alert('Failed to delete file')
-    }
-  }
+  };
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const getFileIcon = (type: string) => {
-    if (type.includes('pdf')) return '📄'
-    if (type.includes('word') || type.includes('document')) return '📝'
-    if (type.includes('excel') || type.includes('spreadsheet')) return '📊'
-    if (type.includes('csv')) return '📋'
-    if (type.includes('text')) return '📄'
-    return '📁'
-  }
+    // Documents
+    if (type.includes('pdf')) return '📄';
+    if (type.includes('word') || type.includes('document')) return '📝';
+    if (type.includes('excel') || type.includes('spreadsheet')) return '📊';
+    if (type.includes('csv')) return '📋';
+    if (type.includes('text')) return '📄';
+    
+    // Images
+    if (type.includes('image')) return '🖼️';
+    
+    // Audio
+    if (type.includes('audio')) return '🎵';
+    
+    return '📁';
+  };
+
+  // Example: show error toast on upload error
+  const handleUploadError = (error: string) => {
+    showToast(error, 'error');
+  };
+  // Example: show success toast on upload success
+  const handleUploadSuccess = (msg: string) => {
+    showToast(msg, 'success');
+  };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      {/* Upload Area */}
-      <div
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 ${
-          isDragOver
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".pdf,.docx,.txt,.csv,.xls,.xlsx"
-          onChange={handleFileInput}
-          className="hidden"
-        />
-        
-        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          Upload Files to Smart Brain
-        </h3>
-        <p className="text-gray-600 mb-4">
-          Drag and drop files here, or{' '}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
-            browse files
-          </button>
-        </p>
-        <p className="text-sm text-gray-500">
-          Supported formats: PDF, DOCX, TXT, CSV, XLS, XLSX (Max 50MB per file)
-        </p>
-      </div>
-
-      {/* Upload Progress */}
-      {isUploading && (
-        <div className="mt-6 bg-blue-50 rounded-lg p-4">
+    <Card className="max-w-2xl mx-auto mt-8 shadow-lg border border-gray-200">
+      <CardHeader className="flex flex-col gap-2">
+        <CardTitle className="flex items-center justify-between">
+          <span>Smart File Upload</span>
           <div className="flex items-center gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-            <span className="text-blue-800 font-medium">Uploading files...</span>
+            <span className="text-xs font-medium text-gray-500">All Files</span>
+            <Switch
+              checked={queryMode === 'single'}
+              onCheckedChange={v => setQueryMode(v ? 'single' : 'all')}
+              aria-label="Toggle query mode"
+            />
+            <span className="text-xs font-medium text-gray-500">Single File</span>
           </div>
+        </CardTitle>
+        <p className="text-sm text-gray-500">Upload multiple files (PDF, DOCX, TXT, CSV, XLSX, MP3, MP4, PNG, JPG). Track progress for each stage. Only active files are used for queries.</p>
+      </CardHeader>
+      <CardContent>
+        {/* Drag & Drop Area */}
+        <div
+          className={cn(
+            'border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors',
+            isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'
+          )}
+          onDragOver={e => { e.preventDefault(); setIsDragActive(true); }}
+          onDragLeave={e => { e.preventDefault(); setIsDragActive(false); }}
+          onDrop={e => {
+            e.preventDefault();
+            setIsDragActive(false);
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              handleFiles(e.dataTransfer.files);
+            }
+          }}
+          tabIndex={0}
+          aria-label="File upload dropzone"
+        >
+          <Upload className="w-8 h-8 text-blue-500 mb-2" />
+          <span className="font-medium">Drag & drop files here</span>
+          <span className="text-xs text-gray-400 mt-1">or</span>
+          <Button
+            variant="outline"
+            className="mt-2"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Open file picker"
+          >
+            Browse Files
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.txt,.csv,.xlsx,.mp3,.mp4,.png,.jpg,.jpeg"
+            className="hidden"
+            onChange={handleFileInput}
+            aria-label="File picker"
+          />
         </div>
-      )}
-
-      {/* Uploaded Files List */}
-      {uploadedFiles.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Uploaded Files ({uploadedFiles.length})
-          </h3>
-          <div className="space-y-3">
-            {uploadedFiles.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">{getFileIcon(file.type)}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{file.name}</span>
-                      {file.status === 'uploading' && (
-                        <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                      )}
-                      {file.status === 'success' && (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      )}
-                      {file.status === 'error' && (
-                        <AlertCircle className="w-4 h-4 text-red-600" />
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {formatFileSize(file.size)} • {file.type}
-                    </div>
-                    {file.error && (
-                      <div className="text-sm text-red-600 mt-1">{file.error}</div>
-                    )}
-                  </div>
+        {/* File List */}
+        <div className="mt-6 space-y-4">
+          {files.length === 0 && (
+            <div className="text-center text-gray-400 text-sm">No files uploaded yet.</div>
+          )}
+          {files.map((file, idx) => (
+            <div key={file.id || file.file.name + idx} className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 bg-gray-50 shadow-sm">
+              {/* File icon */}
+              <div className="flex-shrink-0">
+                {getFileIcon(file.file.type)}
+              </div>
+              {/* File info */}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{file.file.name}</div>
+                <div className="text-xs text-gray-400">{formatFileSize(file.file.size)}</div>
+              </div>
+              {/* Status chip */}
+              <div className="flex flex-col items-end gap-1">
+                <span className={cn(
+                  'px-2 py-0.5 rounded-full text-xs font-semibold',
+                  file.status === 'uploading' && 'bg-blue-100 text-blue-700',
+                  file.status === 'parsing' && 'bg-yellow-100 text-yellow-700',
+                  file.status === 'chunking' && 'bg-purple-100 text-purple-700',
+                  file.status === 'embedding' && 'bg-pink-100 text-pink-700',
+                  file.status === 'complete' && 'bg-green-100 text-green-700',
+                  file.status === 'error' && 'bg-red-100 text-red-700'
+                )}>
+                  {file.status.charAt(0).toUpperCase() + file.status.slice(1)}
+                </span>
+                {/* Progress bar */}
+                {['uploading', 'parsing', 'chunking', 'embedding'].includes(file.status) && (
+                  <Progress value={file.progress} className="w-24 h-2 mt-1" />
+                )}
+                {/* Error message */}
+                {file.status === 'error' && file.error && (
+                  <span className="text-xs text-red-500 mt-1">{file.error}</span>
+                )}
+              </div>
+              {/* Actions */}
+              <div className="flex flex-col gap-1 ml-2">
+                {file.status === 'error' && (
+                  <Button size="sm" variant="outline" onClick={() => retryFile(file)} aria-label="Retry upload">Retry</Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => removeFile(file)} aria-label="Remove file">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* File History Section */}
+        <div className="mt-10">
+          <h3 className="text-lg font-semibold mb-2">File History</h3>
+          {historyLoading && <div className="text-gray-400 text-sm">Loading...</div>}
+          {historyError && <div className="text-red-500 text-sm">{historyError}</div>}
+          {!historyLoading && fileHistory.length === 0 && <div className="text-gray-400 text-sm">No file history yet.</div>}
+          <div className="space-y-2">
+            {fileHistory.map(fh => (
+              <div key={fh.id} className="flex items-center gap-4 p-2 rounded border border-gray-100 bg-white shadow-sm">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{fh.file_name}</div>
+                  <div className="text-xs text-gray-400">Uploaded: {new Date(fh.created_at).toLocaleString()}</div>
+                  <div className="text-xs text-gray-400">Chunks: {fh.chunkCount}</div>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  {file.chunkCount && (
-                    <span className="text-sm text-gray-500">
-                      Chunks: {file.chunkCount}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => deleteFile(file.id)}
-                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                <Button size="sm" variant="outline" onClick={() => handleDeleteHistoryFile(fh.id)} aria-label="Delete file">Delete</Button>
               </div>
             ))}
           </div>
         </div>
-      )}
-    </div>
-  )
+      </CardContent>
+    </Card>
+  );
 }
 
 export default FileUpload 

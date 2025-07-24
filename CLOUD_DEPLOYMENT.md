@@ -7,8 +7,9 @@ This guide will help you deploy your AI Chatbot to the cloud using either Vercel
 Before deploying, make sure you have:
 
 1. **GitHub Repository**: Your code pushed to GitHub
-2. **Supabase Project**: Database and authentication set up
-3. **OpenAI API Key**: For AI functionality
+2. **Clerk.dev Account**: Authentication set up
+3. **Groq API Key**: For AI chat completions
+4. **Together.ai API Key**: For embeddings
 4. **Cloud Accounts**: Vercel and/or Render accounts
 
 ## 🎯 Deployment Options
@@ -52,9 +53,12 @@ Before deploying, make sure you have:
    ```
    NODE_ENV=production
    PORT=3001
-   OPENAI_API_KEY=your_openai_api_key
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+   GROQ_API_KEY=your_groq_api_key
+   TOGETHER_API_KEY=your_together_api_key
+   CLERK_SECRET_KEY=your_clerk_secret_key
+   NEON_DATABASE_URL=your_neon_database_url
+   QDRANT_URL=your_qdrant_url
+   CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
    JWT_SECRET=your_jwt_secret
    CORS_ORIGIN=https://your-frontend-name.vercel.app
    ALLOWED_ORIGINS=https://your-frontend-name.vercel.app
@@ -78,8 +82,9 @@ Before deploying, make sure you have:
 5. **Add Environment Variables**:
    ```
    VITE_API_BASE_URL=https://your-backend-name.onrender.com
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+   VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+   VITE_UMAMI_WEBSITE_ID=your_umami_website_id
    ```
 
 6. **Deploy**: Click "Deploy"
@@ -131,20 +136,45 @@ Create these in your cloud platform dashboard:
 # Required
 NODE_ENV=production
 PORT=3001
-OPENAI_API_KEY=your_openai_api_key
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-JWT_SECRET=your_jwt_secret
-
-# CORS Settings
 CORS_ORIGIN=https://your-frontend-url.com
 ALLOWED_ORIGINS=https://your-frontend-url.com
 
-# Optional
-REDIS_URL=your_redis_url
-CACHE_TTL_SECONDS=3600
-MAX_CACHE_SIZE=1000
-ENABLE_MEMORY_CACHE=true
+# Authentication (Clerk.dev)
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+
+# Database (Neon.tech)
+NEON_DATABASE_URL=postgresql://username:password@host:port/database
+NEON_HOST=your-neon-host.neon.tech
+NEON_DATABASE=your_database_name
+NEON_USERNAME=your_username
+NEON_PASSWORD=your_password
+
+# Vector Database (Qdrant Cloud)
+QDRANT_URL=https://your-cluster-id.us-east-1-0.aws.cloud.qdrant.io:6333
+QDRANT_API_KEY=your_qdrant_api_key
+QDRANT_COLLECTION=smart_brain_embeddings
+
+# File Storage (Cloudinary)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# AI/ML Services
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama3-70b-8192
+TOGETHER_API_KEY=your_together_api_key
+TOGETHER_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-base
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# Analytics (Umami)
+UMAMI_WEBSITE_ID=your_umami_website_id
+UMAMI_URL=https://your-umami-instance.com
+UMAMI_API_KEY=your_umami_api_key
+
+# Security & Performance
+JWT_SECRET=your_jwt_secret_key_here_make_it_long_and_random
+ENCRYPTION_KEY=your_32_byte_encryption_key_here_make_it_random
 LOG_LEVEL=info
 ```
 
@@ -153,11 +183,13 @@ LOG_LEVEL=info
 ```bash
 # Required
 VITE_API_BASE_URL=https://your-backend-url.com
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+VITE_UMAMI_WEBSITE_ID=your_umami_website_id
 
 # Optional
-VITE_OPENAI_MODEL=gpt-3.5-turbo
+VITE_ENABLE_STREAMING=true
+VITE_ENABLE_CACHING=true
 VITE_ENABLE_ANALYTICS=true
 VITE_ENABLE_ERROR_TRACKING=true
 ```
@@ -173,7 +205,8 @@ VITE_ENABLE_ERROR_TRACKING=true
 
 1. **CORS Errors**: Make sure CORS_ORIGIN matches your frontend URL
 2. **API 404**: Check if VITE_API_BASE_URL is correct
-3. **Authentication Issues**: Verify Supabase keys are correct
+3. **Authentication Issues**: Verify Clerk keys are correct
+4. **File Upload Issues**: Check Cloudinary configuration
 
 ## 📊 Monitoring
 

@@ -30,9 +30,9 @@ declare global {
 // Jest/Vite compatibility: Define global viteEnv for tests
 (globalThis as any).viteEnv = {
   VITE_API_URL: 'http://localhost:3001',
-  VITE_SUPABASE_URL: 'http://localhost:54321',
-  VITE_SUPABASE_ANON_KEY: 'test-anon-key',
-  VITE_OPENAI_MODEL: 'gpt-3.5-turbo',
+  VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_test_key',
+  VITE_CLERK_SECRET_KEY: 'sk_test_test_key',
+  VITE_GROQ_MODEL: 'llama3-70b-8192',
   NODE_ENV: 'test'
 };
 
@@ -47,9 +47,9 @@ if (typeof global.TextDecoder === 'undefined') {
 
 // Mock environment variables
 process.env.VITE_API_URL = 'http://localhost:3001';
-process.env.VITE_SUPABASE_URL = 'http://localhost:54321';
-process.env.VITE_SUPABASE_ANON_KEY = 'test-anon-key';
-process.env.VITE_OPENAI_MODEL = 'gpt-3.5-turbo';
+process.env.VITE_CLERK_PUBLISHABLE_KEY = 'pk_test_test_key';
+process.env.VITE_CLERK_SECRET_KEY = 'sk_test_test_key';
+process.env.VITE_GROQ_MODEL = 'llama3-70b-8192';
 process.env.NODE_ENV = 'test';
 
 // Mock browser APIs

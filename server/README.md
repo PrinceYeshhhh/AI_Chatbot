@@ -5,7 +5,7 @@ Advanced AI/ML backend service for the chatbot application with vector embedding
 ## 🚀 Features
 
 ### Core AI/ML Capabilities
-- **Vector Embeddings**: ChromaDB + OpenAI embeddings for semantic search
+- **Vector Embeddings**: ChromaDB + Together AI or Gemini embeddings for semantic search
 - **Document Processing**: Support for TXT, PDF, CSV, MD, JSON, DOCX files
 - **Intelligent Chat**: Context-aware responses with streaming support
 - **Auto-Training**: Instant model updates from uploaded documents
@@ -43,10 +43,11 @@ npm run dev
 ### Required Environment Variables
 
 ```bash
-# OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-3.5-turbo
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+# AI/ML Services Configuration
+GROQ_API_KEY=gsk-your-groq-api-key-here
+GROQ_MODEL=llama3-70b-8192
+TOGETHER_API_KEY=your-together-api-key-here
+TOGETHER_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-base
 
 # Server Configuration
 PORT=3001
@@ -54,8 +55,9 @@ NODE_ENV=development
 CORS_ORIGIN=http://localhost:5173
 
 # Vector Database
-CHROMA_DB_PATH=./vector_store
-CHROMA_COLLECTION_NAME=chatbot_embeddings
+QDRANT_URL=https://your-cluster.qdrant.io
+QDRANT_API_KEY=your_qdrant_api_key
+QDRANT_COLLECTION=smart_brain_embeddings
 
 # File Upload
 UPLOAD_DIR=./uploads
@@ -160,7 +162,7 @@ docker build -t ai-chatbot-backend .
 
 # Run container
 docker run -p 3001:3001 \
-  -e OPENAI_API_KEY=your-key \
+  -e GROQ_API_KEY=your-key \
   -v $(pwd)/uploads:/app/uploads \
   -v $(pwd)/vector_store:/app/vector_store \
   ai-chatbot-backend
@@ -198,7 +200,7 @@ tail -f logs/combined.log
 ### File Processing Pipeline
 1. **Upload**: Files uploaded via `/api/upload`
 2. **Processing**: Documents parsed and chunked
-3. **Embedding**: Text converted to vectors using OpenAI
+3. **Embedding**: Text converted to vectors using Together AI or Gemini
 4. **Storage**: Vectors stored in ChromaDB
 5. **Retrieval**: Similarity search during chat
 
@@ -206,7 +208,7 @@ tail -f logs/combined.log
 1. **Query**: User sends message to `/api/chat`
 2. **Context**: Relevant documents retrieved from vector store
 3. **Prompt**: Context + query formatted for LLM
-4. **Response**: Streamed response from OpenAI
+4. **Response**: Streamed response from Groq or Gemini
 5. **Cache**: Response cached for performance
 
 ## 📊 Monitoring
@@ -273,11 +275,11 @@ docker-compose logs -f ai-chatbot-backend
 
 ### Common Issues
 
-**OpenAI API Errors**
+**Gemini API Errors**
 ```bash
 # Check API key
-curl -H "Authorization: Bearer $OPENAI_API_KEY" \
-  https://api.openai.com/v1/models
+curl -H "Authorization: Bearer $GROQ_API_KEY" \
+  https://generativelanguage.googleapis.com/v1beta/models
 
 # Verify environment variables
 npm run config
@@ -353,6 +355,6 @@ MIT License - see LICENSE file for details.
 
 ## ⚠️ TODOs & Further Review
 - [ ] Review all API endpoints for up-to-date documentation (see /api/chat, /api/upload, /api/status, /api/training).
-- [ ] Ensure all new features (rate limiting, input validation, OpenAI usage logging, etc.) are reflected in docs.
+- [ ] Ensure all new features (rate limiting, input validation, Gemini usage logging, etc.) are reflected in docs.
 - [ ] Add/expand OpenAPI/Swagger docs as needed.
 - [ ] Review and update this README after major changes.

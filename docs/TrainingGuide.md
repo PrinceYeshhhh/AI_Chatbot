@@ -107,8 +107,8 @@ class VectorStore {
 
 ```bash
 # API Configuration
-VITE_OPENAI_API_KEY=sk-your-openai-key-here
-VITE_API_ENDPOINT=https://api.openai.com/v1/chat/completions
+VITE_GOOGLE_API_KEY=your-google-api-key-here
+VITE_API_ENDPOINT=https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent
 VITE_MODEL_NAME=gpt-3.5-turbo
 
 # Training Configuration

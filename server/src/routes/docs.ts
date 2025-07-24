@@ -1,112 +1,460 @@
 import express, { Request, Response } from 'express';
-import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import path from 'path';
 
 const router = express.Router();
 
-// Swagger configuration
-const options = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'AI Chatbot API',
-      version: '1.0.0',
-      description: 'A comprehensive API for an AI-powered chatbot with RAG capabilities, file upload, and training data management.',
-      contact: {
-        name: 'API Support',
-        email: 'support@aichatbot.com'
+// Enhanced Swagger configuration
+const swaggerDefinition = {
+  openapi: '3.0.0',
+  info: {
+    title: 'Smart Brain AI Chatbot API',
+    version: '1.0.0',
+    description: 'Complete API documentation for the Smart Brain AI Chatbot system using Groq, Together AI, Cloudinary, and other modern providers',
+    contact: {
+      name: 'API Support',
+      email: 'support@smartbrain.com',
+      url: 'https://github.com/your-repo/issues'
+    },
+    license: {
+      name: 'MIT',
+      url: 'https://opensource.org/licenses/MIT'
+    }
+  },
+  servers: [
+    {
+      url: 'http://localhost:3001/api',
+      description: 'Development server'
+    },
+    {
+      url: 'https://your-backend.railway.app/api',
+      description: 'Production server'
+    }
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT token from authentication endpoints'
       }
     },
-    servers: [
-      {
-        url: process.env.API_BASE_URL || 'https://your-backend-name.onrender.com',
-        description: 'Production server'
-      }
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT'
+    schemas: {
+      ChatRequest: {
+        type: 'object',
+        properties: {
+          message: {
+            type: 'string',
+            description: 'User message',
+            example: 'What is machine learning?'
+          },
+          sessionId: {
+            type: 'string',
+            description: 'Optional session ID',
+            example: 'session_123'
+          },
+          mode: {
+            type: 'string',
+            enum: ['auto', 'chat', 'search'],
+            description: 'Chat mode',
+            example: 'auto'
+          },
+          fileFilter: {
+            type: 'string',
+            description: 'File filter for context',
+            example: 'recent'
+          },
+          workspace_id: {
+            type: 'string',
+            description: 'Workspace ID',
+            example: 'workspace_456'
+          }
+        },
+        required: ['message']
+      },
+      ChatResponse: {
+        type: 'object',
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true
+          },
+          response: {
+            type: 'string',
+            description: 'AI response',
+            example: 'Machine learning is a subset of artificial intelligence...'
+          },
+          context: {
+            type: 'object',
+            properties: {
+              retrievedDocuments: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    content: { type: 'string' },
+                    score: { type: 'number' }
+                  }
+                }
+              },
+              mode: { type: 'string' },
+              tokensUsed: { type: 'number' }
+            }
+          },
+          metadata: {
+            type: 'object',
+            properties: {
+              modelUsed: { type: 'string' },
+              responseTime: { type: 'number' },
+              confidence: { type: 'number' }
+            }
+          }
         }
       },
-      schemas: {
-        ChatMessage: {
-          type: 'object',
-          properties: {
-            message: {
-              type: 'string',
-              description: 'The user message to send to the AI'
-            },
-            history: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  role: { type: 'string', enum: ['user', 'assistant'] },
-                  content: { type: 'string' }
-                }
+      UploadResponse: {
+        type: 'object',
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true
+          },
+          message: {
+            type: 'string',
+            example: 'Files uploaded and processed successfully'
+          },
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                originalName: { type: 'string' },
+                filename: { type: 'string' },
+                size: { type: 'number' },
+                mimetype: { type: 'string' },
+                cloudinaryUrl: { type: 'string' },
+                chunks: { type: 'number' },
+                status: { type: 'string' }
               }
-            },
-            useRAG: {
-              type: 'boolean',
-              description: 'Whether to use RAG (Retrieval-Augmented Generation)',
-              default: true
             }
           },
-          required: ['message']
-        },
-        TrainingData: {
-          type: 'object',
-          properties: {
-            input: { type: 'string', description: 'Training input text' },
-            expectedOutput: { type: 'string', description: 'Expected response' },
-            intent: { type: 'string', description: 'Intent classification' }
-          },
-          required: ['input', 'expectedOutput', 'intent']
-        },
-        FileUpload: {
-          type: 'object',
-          properties: {
-            file: {
-              type: 'string',
-              format: 'binary',
-              description: 'File to upload (PDF, DOCX, TXT, MD, CSV)'
+          vectorStats: {
+            type: 'object',
+            properties: {
+              totalDocuments: { type: 'number' },
+              totalChunks: { type: 'number' },
+              collectionSize: { type: 'string' }
             }
           }
-        },
-        Error: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            message: { type: 'string' }
+        }
+      },
+      ErrorResponse: {
+        type: 'object',
+        properties: {
+          success: {
+            type: 'boolean',
+            example: false
+          },
+          error: {
+            type: 'string',
+            description: 'Error message'
+          },
+          message: {
+            type: 'string',
+            description: 'Detailed error message'
+          },
+          code: {
+            type: 'string',
+            description: 'Error code'
           }
         }
       }
-    },
-    security: [
-      {
-        bearerAuth: []
-      }
-    ]
+    }
   },
-  apis: ['./src/routes/*.ts', './src/app.ts']
+  security: [{ bearerAuth: [] }],
+  tags: [
+    {
+      name: 'Authentication',
+      description: 'User authentication and authorization endpoints'
+    },
+    {
+      name: 'Chat',
+      description: 'AI chat and conversation endpoints'
+    },
+    {
+      name: 'File Upload',
+      description: 'File upload and processing endpoints'
+    },
+    {
+      name: 'Training',
+      description: 'Training data management endpoints'
+    },
+    {
+      name: 'Agent Tools',
+      description: 'AI agent and tool execution endpoints'
+    },
+    {
+      name: 'Analytics',
+      description: 'Analytics and metrics endpoints'
+    },
+    {
+      name: 'Admin',
+      description: 'Administrative endpoints (admin only)'
+    },
+    {
+      name: 'Health',
+      description: 'System health and status endpoints'
+    }
+  ]
 };
 
-const specs = swaggerJsdoc(options);
+const swaggerOptions = {
+  swaggerDefinition,
+  apis: [
+    './src/routes/*.ts',
+    './src/routes/api.ts',
+    './src/routes/chat.ts',
+    './src/routes/upload.ts',
+    './src/routes/auth.ts',
+    './src/routes/training.ts',
+    './src/routes/agentTool.ts',
+    './src/routes/analytics.ts',
+    './src/routes/status.ts'
+  ],
+  explorer: true
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Enhanced Swagger UI setup
+const swaggerUiOptions = {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Smart Brain AI Chatbot API Documentation',
+  customfavIcon: '/favicon.ico',
+  swaggerOptions: {
+    docExpansion: 'list',
+    filter: true,
+    showRequestHeaders: true,
+    showCommonExtensions: true,
+    tryItOutEnabled: true,
+    requestInterceptor: (req: any) => {
+      // Add default headers
+      req.headers['Content-Type'] = 'application/json';
+      return req;
+    },
+    responseInterceptor: (res: any) => {
+      // Format responses
+      return res;
+    }
+  }
+};
 
 // Serve Swagger UI
 router.use('/', swaggerUi.serve);
-router.get('/', swaggerUi.setup(specs, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'AI Chatbot API Documentation'
-}));
+router.get('/', swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
-// Serve OpenAPI spec as JSON
-router.get('/swagger.json', (req: Request, res: Response) => {
+// API documentation info
+router.get('/info', (req: Request, res: Response) => {
+  res.json({
+    title: 'Smart Brain AI Chatbot API',
+    version: '1.0.0',
+    description: 'Complete API documentation for the Smart Brain AI Chatbot system',
+    providers: {
+      chat: 'Groq (Llama3-70b-8192)',
+      embeddings: 'Together AI (m2-bert-80M-8k-base)',
+      storage: 'Cloudinary',
+      database: 'Neon PostgreSQL',
+      vector: 'Qdrant Cloud',
+      auth: 'Clerk.dev'
+    },
+    endpoints: {
+      authentication: '/api/auth/*',
+      chat: '/api/chat/*',
+      upload: '/api/upload',
+      training: '/api/training/*',
+      agentTools: '/api/agent-tools/*',
+      analytics: '/api/analytics/*',
+      admin: '/api/admin/*',
+      health: '/api/status/*'
+    },
+    documentation: {
+      swagger: '/api/docs',
+      postman: '/api/docs/postman',
+      openapi: '/api/docs/openapi.json'
+    }
+  });
+});
+
+// Serve OpenAPI specification
+router.get('/openapi.json', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
-  res.send(specs);
+  res.json(swaggerSpec);
+});
+
+// Postman collection endpoint
+router.get('/postman', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename=smart-brain-api.postman_collection.json');
+  
+  // Return the Postman collection
+  const postmanCollection = {
+    info: {
+      name: 'Smart Brain AI Chatbot API',
+      description: 'Complete API collection for the Smart Brain AI Chatbot system',
+      version: '1.0.0',
+      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
+    },
+    variable: [
+      {
+        key: 'base_url',
+        value: 'http://localhost:3001',
+        type: 'string'
+      },
+      {
+        key: 'jwt_token',
+        value: 'your_jwt_token_here',
+        type: 'string'
+      }
+    ],
+    item: [
+      {
+        name: 'Authentication',
+        item: [
+          {
+            name: 'Register User',
+            request: {
+              method: 'POST',
+              header: [{ key: 'Content-Type', value: 'application/json' }],
+              body: {
+                mode: 'raw',
+                raw: '{"email": "test@example.com", "password": "password123", "name": "Test User"}'
+              },
+              url: '{{base_url}}/api/register'
+            }
+          },
+          {
+            name: 'Login User',
+            request: {
+              method: 'POST',
+              header: [{ key: 'Content-Type', value: 'application/json' }],
+              body: {
+                mode: 'raw',
+                raw: '{"email": "test@example.com", "password": "password123"}'
+              },
+              url: '{{base_url}}/api/login'
+            }
+          }
+        ]
+      },
+      {
+        name: 'Chat',
+        item: [
+          {
+            name: 'Test Chat',
+            request: {
+              method: 'POST',
+              header: [{ key: 'Content-Type', value: 'application/json' }],
+              body: {
+                mode: 'raw',
+                raw: '{"message": "Hello, how are you?"}'
+              },
+              url: '{{base_url}}/api/test-chat'
+            }
+          },
+          {
+            name: 'Smart Chat',
+            request: {
+              method: 'POST',
+              header: [
+                { key: 'Content-Type', value: 'application/json' },
+                { key: 'Authorization', value: 'Bearer {{jwt_token}}' }
+              ],
+              body: {
+                mode: 'raw',
+                raw: '{"message": "What is machine learning?", "sessionId": "session_123"}'
+              },
+              url: '{{base_url}}/api/chat/smart'
+            }
+          }
+        ]
+      }
+    ]
+  };
+  
+  res.json(postmanCollection);
+});
+
+// API examples endpoint
+router.get('/examples', (req: Request, res: Response) => {
+  res.json({
+    examples: {
+      chat: {
+        request: {
+          method: 'POST',
+          url: '/api/chat',
+          headers: {
+            'Authorization': 'Bearer your_jwt_token',
+            'Content-Type': 'application/json'
+          },
+          body: {
+            message: 'What is machine learning?',
+            sessionId: 'session_123',
+            mode: 'auto'
+          }
+        },
+        response: {
+          success: true,
+          response: 'Machine learning is a subset of artificial intelligence...',
+          context: {
+            retrievedDocuments: [],
+            mode: 'auto',
+            tokensUsed: 1500
+          }
+        }
+      },
+      upload: {
+        request: {
+          method: 'POST',
+          url: '/api/upload',
+          headers: {
+            'Authorization': 'Bearer your_jwt_token'
+          },
+          body: 'multipart/form-data with files'
+        },
+        response: {
+          success: true,
+          message: 'Files uploaded and processed successfully',
+          files: [
+            {
+              originalName: 'document.pdf',
+              filename: 'document-1234567890.pdf',
+              size: 1024000,
+              status: 'processed'
+            }
+          ]
+        }
+      }
+    }
+  });
+});
+
+// Health check for docs service
+router.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    service: 'docs',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      swagger: '/api/docs',
+      openapi: '/api/docs/openapi.json',
+      postman: '/api/docs/postman',
+      info: '/api/docs/info',
+      examples: '/api/docs/examples'
+    }
+  });
 });
 
 export default router; 

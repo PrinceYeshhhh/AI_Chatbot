@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useToast } from '../App';
 
 interface ClearChatButtonProps {
   onClear: () => void;
@@ -6,22 +7,22 @@ interface ClearChatButtonProps {
 
 const ClearChatButton: React.FC<ClearChatButtonProps> = ({ onClear }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const handleClearChat = async () => {
     if (!window.confirm('Are you sure you want to clear the chat?')) return;
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/chat/clear', { method: 'DELETE' });
       if (res.ok) {
         onClear();
+        showToast('Chat cleared successfully.', 'success');
       } else {
         const data = await res.json();
-        setError(data.error || 'Failed to clear chat');
+        showToast(data.error || 'Failed to clear chat', 'error');
       }
     } catch (err: any) {
-      setError(err.message || 'Unknown error');
+      showToast(err.message || 'Unknown error', 'error');
     } finally {
       setLoading(false);
     }
@@ -36,7 +37,6 @@ const ClearChatButton: React.FC<ClearChatButtonProps> = ({ onClear }) => {
       >
         {loading ? 'Clearing...' : 'Clear Chat'}
       </button>
-      {error && <div className="text-red-600 mt-2">{error}</div>}
     </div>
   );
 };

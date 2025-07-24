@@ -5,24 +5,14 @@ import { UserPayload } from '../jwt';
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        email: string;
-        role: string;
-        permissions: string[];
-      };
+      user?: UserPayload;
     }
   }
 }
 
 // Type for authenticated requests
 export interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-    permissions: string[];
-  };
+  user: UserPayload;
 }
 
 // Type for async Express handlers

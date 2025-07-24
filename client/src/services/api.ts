@@ -1,4 +1,3 @@
-import { auth } from '../lib/supabase'
 import axios from 'axios'
 import useSWR from 'swr'
 
@@ -9,16 +8,12 @@ export const api = axios.create({
 
 class ApiService {
   private async getAuthHeaders(): Promise<HeadersInit> {
-    const { session } = await auth.getSession()
-    
+    // Supabase auth headers removed
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     }
 
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`
-    }
-
+    // Supabase auth headers removed
     return headers
   }
 
@@ -91,15 +86,13 @@ class ApiService {
 
   // File upload method (for future use)
   async uploadFile(file: File, endpoint: string = '/api/upload') {
-    const { session } = await auth.getSession()
+    // Supabase auth headers removed
     
     const formData = new FormData()
     formData.append('file', file)
 
     const headers: HeadersInit = {}
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`
-    }
+    // Supabase auth headers removed
 
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}${endpoint}`, {
       method: 'POST',
@@ -122,6 +115,21 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // Onboarding progress endpoints
+  async getOnboardingProgress() {
+    return this.get('/api/user-settings/onboarding-progress');
+  }
+  async updateOnboardingProgress(data: { has_completed_onboarding?: boolean; onboarding_progress?: number; last_seen_docs_version?: string }) {
+    return this.post('/api/user-settings/onboarding-progress', data);
+  }
+  // Support ticket endpoints
+  async createSupportTicket(data: { subject: string; message: string }) {
+    return this.post('/api/support/ticket', data);
+  }
+  async getSupportFaqs() {
+    return this.get('/api/support/faqs');
   }
 }
 

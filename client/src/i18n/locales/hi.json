@@ -1,0 +1,22 @@
+{
+  "welcome": "इम्पीरियल एआई चैटबोट में आपका स्वागत है!",
+  "settings": "सेटिंग्स",
+  "language": "भाषा",
+  "tts": "टेक्स्ट-टू-स्पीच",
+  "accessibility": "सुलभता",
+  "onboarding": "ऑनबोर्डिंग",
+  "api_docs": "एपीआई दस्तावेज़",
+  "developer_tools": "डेवलपर टूल्स",
+  "logout": "लॉगआउट",
+  "save": "सहेजें",
+  "cancel": "रद्द करें",
+  "auto_read": "ऑटो रीड",
+  "accessibility_mode": "सुलभता मोड",
+  "high_contrast": "उच्च कंट्रास्ट",
+  "font_size": "फ़ॉन्ट आकार",
+  "start_onboarding": "ऑनबोर्डिंग शुरू करें",
+  "skip": "छोड़ें",
+  "next": "अगला",
+  "done": "समाप्त",
+  "listen": "सुनें"
+} 

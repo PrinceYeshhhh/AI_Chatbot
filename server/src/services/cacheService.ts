@@ -8,10 +8,10 @@ try {
   logger.warn('Redis not available, using memory cache only');
 }
 
-interface CacheOptions {
-  ttl?: number;
-  prefix?: string;
-}
+// interface CacheOptions {
+//   ttl?: number;
+//   prefix?: string;
+// }
 
 interface CacheStats {
   hits: number;
@@ -71,8 +71,8 @@ export class CacheService {
 
   constructor() {
     this.memoryCache = new MemoryCache();
-    this.prefix = process.env.CACHE_PREFIX || 'chatbot:';
-    this.useRedis = !!process.env.REDIS_URL && !!Redis;
+    this.prefix = process.env['CACHE_PREFIX'] || 'chatbot:';
+    this.useRedis = !!process.env['REDIS_URL'] && !!Redis;
 
     if (this.useRedis) {
       this.initializeRedis();
@@ -81,7 +81,7 @@ export class CacheService {
 
   private initializeRedis(): void {
     try {
-      this.redis = new Redis(process.env.REDIS_URL!, {
+      this.redis = new Redis(process.env['REDIS_URL']!, {
         retryDelayOnFailover: 100,
         maxRetriesPerRequest: 3,
         lazyConnect: true

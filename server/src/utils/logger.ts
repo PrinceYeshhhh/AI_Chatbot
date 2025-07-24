@@ -1,24 +1,26 @@
-import { Request, Response, NextFunction } from 'express';
+// NOTE: Requires 'winston' package. Run: npm install winston
+import { createLogger, format, transports } from 'winston';
 
-// Simple logger implementation
-export const logger = {
-  info: (message: string, ...args: any[]) => {
-    console.log(`[INFO] ${new Date().toISOString()}: ${message}`, ...args);
-  },
-  error: (message: string, ...args: any[]) => {
-    console.error(`[ERROR] ${new Date().toISOString()}: ${message}`, ...args);
-  },
-  warn: (message: string, ...args: any[]) => {
-    console.warn(`[WARN] ${new Date().toISOString()}: ${message}`, ...args);
-  },
-  debug: (message: string, ...args: any[]) => {
-    console.debug(`[DEBUG] ${new Date().toISOString()}: ${message}`, ...args);
-  }
-};
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp(),
+    format.errors({ stack: true }),
+    format.splat(),
+    format.json()
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/server.log' })
+  ]
+});
 
-// Simple async wrapper for Express handlers
-export function wrapAsync(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    fn(req, res, next).catch(next);
-  };
-} 
+export function logEvent(eventType: string, details: Record<string, any>) {
+  logger.info({ eventType, ...details });
+}
+
+export function logError(eventType: string, details: Record<string, any>) {
+  logger.error({ eventType, ...details });
+}
+
+export default logger; 

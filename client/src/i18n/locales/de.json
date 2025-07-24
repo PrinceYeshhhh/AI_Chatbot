@@ -1,0 +1,22 @@
+{
+  "welcome": "Willkommen beim Imperial AI Chatbot!",
+  "settings": "Einstellungen",
+  "language": "Sprache",
+  "tts": "Text-zu-Sprache",
+  "accessibility": "Barrierefreiheit",
+  "onboarding": "Onboarding",
+  "api_docs": "API-Dokumentation",
+  "developer_tools": "Entwicklertools",
+  "logout": "Abmelden",
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "auto_read": "Automatisches Vorlesen",
+  "accessibility_mode": "Barrierefreiheitsmodus",
+  "high_contrast": "Hoher Kontrast",
+  "font_size": "Schriftgröße",
+  "start_onboarding": "Onboarding starten",
+  "skip": "Überspringen",
+  "next": "Weiter",
+  "done": "Fertig",
+  "listen": "Anhören"
+} 
